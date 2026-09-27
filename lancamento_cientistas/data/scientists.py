@@ -199,3 +199,13 @@ PHASES = [
 def get_hint_for_round(round_index: int) -> str:
     """Retorna a dica de fórmula correspondente à rodada (0 a 4) dentro da fase."""
     return HINTS[round_index % len(HINTS)]
+
+
+def get_calculation_hint(distance_m: float, height_difference_m: float) -> str:
+    """Monta uma dica com os valores da posição atual do alvo."""
+    return (
+        f"Dica de calculo: use x = {distance_m:.1f} m e y = {height_difference_m:+.1f} m. "
+        "Na formula da trajetoria, substitua esses valores: "
+        "y = x*tan(theta) - (g*x^2)/(2*v0^2*cos(theta)^2), com g = 9,8 m/s^2. "
+        "Escolha theta e v0 que facam o resultado de y ficar proximo do valor indicado."
+    )

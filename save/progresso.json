@@ -1,0 +1,32 @@
+{
+  "phase_index": 1,
+  "round_index": 0,
+  "score": 50,
+  "unlocked": [
+    {
+      "phase": "Física",
+      "name": "Marie Curie",
+      "fact": "Pioneira no estudo da radioatividade, descobriu os elementos polônio e rádio. Foi a primeira pessoa a ganhar dois prêmios Nobel em ciências diferentes (Física, 1903, e Química, 1911)."
+    },
+    {
+      "phase": "Física",
+      "name": "Lise Meitner",
+      "fact": "Física que ajudou a explicar teoricamente a fissão nuclear, processo que mais tarde se tornaria a base da energia nuclear."
+    },
+    {
+      "phase": "Física",
+      "name": "Chien-Shiung Wu",
+      "fact": "Realizou o experimento que derrubou a chamada 'lei da conservação da paridade', um marco na física de partículas."
+    },
+    {
+      "phase": "Física",
+      "name": "Cecilia Payne-Gaposchkin",
+      "fact": "Em sua tese de doutorado (1925), foi a primeira a mostrar que as estrelas são compostas majoritariamente de hidrogênio e hélio."
+    },
+    {
+      "phase": "Física",
+      "name": "Hertha Ayrton",
+      "fact": "Física e engenheira, pesquisou o arco elétrico e o movimento ondulatório da areia sob a água. Foi a primeira mulher a apresentar um trabalho próprio na Royal Society."
+    }
+  ]
+}

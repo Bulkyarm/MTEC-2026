@@ -21,12 +21,12 @@ from settings import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TITLE, COLOR_BG, COLOR_GROUND,
     COLOR_WHITE, COLOR_ACCENT, COLOR_GRAY, COLOR_SUCCESS, COLOR_FAIL,
     GROUND_Y, MIN_ANGLE, MAX_ANGLE, MIN_VELOCITY, MAX_VELOCITY,
-    ROUNDS_PER_PHASE, TOTAL_PHASES,
+    ROUNDS_PER_PHASE, TOTAL_PHASES, PIXELS_PER_METER, GRAVITY,
 )
 from entities import Archer, Arrow
 from ui import InputBox, Button, HelpNPC, DialogBox
 from game_state import GameState
-from data.scientists import get_hint_for_round
+from data.scientists import get_hint_for_round, get_calculation_hint
 from levels import build_round
 
 # ---------------------------------------------------------------- #
@@ -62,6 +62,7 @@ class Game:
         self.input_angle = None
         self.input_velocity = None
         self.help_npc = None
+        self.calculation_help_npc = None
         self.obstacles = []
         self.target = None
         self.arrow = None
@@ -110,7 +111,8 @@ class Game:
         self.buttons = [launch_btn]
 
         launch_x, launch_y = self.archer.get_launch_point()
-        self.help_npc = HelpNPC(launch_x - 10, launch_y - 70)
+        self.help_npc = HelpNPC(launch_x - 10, launch_y - 70, symbol="?")
+        self.calculation_help_npc = HelpNPC(launch_x + 55, launch_y - 70, symbol="=")
 
     def _build_game_over_buttons(self):
         self.buttons = [
@@ -274,8 +276,19 @@ class Game:
             obstacle.draw(self.screen)
         self.target.draw(self.screen, self.font_target)
 
+        launch_x, launch_y = self.archer.get_launch_point()
+        distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
+        height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
+        distance_text = (
+            f"Distancia horizontal: {distance_m:.1f} m    "
+            f"Diferenca de altura: {height_difference_m:+.1f} m    g = {GRAVITY:.1f} m/s^2"
+        )
+        distance_surf = self.font_small.render(distance_text, True, COLOR_WHITE)
+        self.screen.blit(distance_surf, (SCREEN_WIDTH // 2 - distance_surf.get_width() // 2, 82))
+
         if self.state == STATE_AIMING:
             self.help_npc.draw(self.screen, self.font_npc)
+            self.calculation_help_npc.draw(self.screen, self.font_npc)
             self.input_angle.draw(self.screen)
             self.input_velocity.draw(self.screen)
             for button in self.buttons:
@@ -349,6 +362,13 @@ class Game:
                         scientist = self.game_state.current_scientist()
                         hint = get_hint_for_round(self.game_state.round_index)
                         self.dialog.show(f"Dica de {scientist['name']}", hint)
+                    elif (event.type == pygame.MOUSEBUTTONDOWN
+                          and self.calculation_help_npc.is_clicked(event.pos)):
+                        launch_x, launch_y = self.archer.get_launch_point()
+                        distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
+                        height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
+                        hint = get_calculation_hint(distance_m, height_difference_m)
+                        self.dialog.show("Dica 2: monte o calculo", hint)
 
                 elif self.state == STATE_GALLERY:
                     for button in self.buttons:

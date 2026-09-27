@@ -97,10 +97,11 @@ class HelpNPC:
     posicionado perto do arqueiro. Ao ser clicada, abre o balão de dica.
     """
 
-    def __init__(self, x, y, radius=26):
+    def __init__(self, x, y, radius=26, symbol="?"):
         self.x = x
         self.y = y
         self.radius = radius
+        self.symbol = symbol
         self.rect = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
 
     def is_clicked(self, pos):
@@ -109,7 +110,7 @@ class HelpNPC:
     def draw(self, surface, font):
         pygame.draw.circle(surface, COLOR_ACCENT, (self.x, self.y), self.radius)
         pygame.draw.circle(surface, COLOR_BLACK, (self.x, self.y), self.radius, width=2)
-        q_surf = font.render("?", True, COLOR_BLACK)
+        q_surf = font.render(self.symbol, True, COLOR_BLACK)
         surface.blit(q_surf, q_surf.get_rect(center=(self.x, self.y)))
 
 
@@ -124,7 +125,7 @@ class DialogBox:
         self.title = ""
         self.message = ""
         self.width = int(screen_width * 0.7)
-        self.height = 160
+        self.height = 208
         self.x = (screen_width - self.width) // 2
         self.y = screen_height - self.height - 30
         self.title_font = pygame.font.SysFont("arial", 22, bold=True)
@@ -168,7 +169,7 @@ class DialogBox:
         surface.blit(title_surf, (self.x + 20, self.y + 14))
 
         lines = self._wrap_text(self.message, self.width - 40)
-        for i, line in enumerate(lines[:4]):
+        for i, line in enumerate(lines[:6]):
             line_surf = self.text_font.render(line, True, COLOR_WHITE)
             surface.blit(line_surf, (self.x + 20, self.y + 48 + i * 24))
 
