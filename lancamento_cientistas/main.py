@@ -54,6 +54,7 @@ class Game:
 
         self.state = STATE_MENU
         self.game_state = GameState()
+        self.game_state.reset()
 
         self.archer = Archer()
         self.dialog = DialogBox(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -68,6 +69,8 @@ class Game:
         self.arrow = None
         self.result_message = None
         self.last_result_success = False
+        self.result_pending = False
+        self.layout_index = 0
 
         self._build_menu_buttons()
 
@@ -127,6 +130,9 @@ class Game:
     # ------------------------------------------------------------ #
 
     def _on_start_click(self):
+        if self.game_state.is_game_complete():
+            self.game_state.reset()
+            self.layout_index = 0
         self.state = STATE_PHASE_INTRO
         self._build_phase_intro_buttons()
 
@@ -144,6 +150,7 @@ class Game:
 
     def _on_restart_click(self):
         self.game_state.reset()
+        self.layout_index = 0
         self.state = STATE_PHASE_INTRO
         self._build_phase_intro_buttons()
 
@@ -167,14 +174,17 @@ class Game:
 
     def _start_round(self):
         scientist = self.game_state.current_scientist()
+        self.layout_index += 1
         self.obstacles, self.target = build_round(
-            self.game_state.phase_index, self.game_state.round_index, scientist["name"]
+            self.game_state.phase_index, self.game_state.round_index, scientist["name"],
+            seed=self.layout_index,
         )
         self._build_aiming_widgets()
         self.state = STATE_AIMING
 
     def _finish_launch(self, success: bool, reason: str):
         self.last_result_success = success
+        self.result_pending = True
         self.arrow = None
         if success:
             self.game_state.register_hit()
@@ -184,9 +194,14 @@ class Game:
                 scientist["fact"],
             )
         else:
-            self.dialog.show("Nao foi dessa vez...", reason)
+            self.dialog.show("Tente novamente", reason)
 
     def _advance_after_result(self):
+        self.result_pending = False
+        if not self.last_result_success:
+            self._start_round()
+            return
+
         still_playing = self.game_state.advance_round()
         if not still_playing:
             self.state = STATE_GAME_OVER
@@ -339,9 +354,8 @@ class Game:
                     sys.exit()
 
                 if self.dialog.visible:
-                    was_success_dialog = (self.state == STATE_LAUNCHED)
                     self.dialog.handle_event(event)
-                    if not self.dialog.visible and was_success_dialog:
+                    if not self.dialog.visible and self.result_pending:
                         self._advance_after_result()
                     continue
 

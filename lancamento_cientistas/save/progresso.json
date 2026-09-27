@@ -1,12 +1,6 @@
 {
-  "phase_index": 2,
-  "round_index": 3,
-  "score": 10,
-  "unlocked": [
-    {
-      "phase": "Biologia e Medicina",
-      "name": "Virginia Apgar",
-      "fact": "Anestesiologista que criou o Índice de Apgar, usado até hoje para avaliar rapidamente a saúde de recém-nascidos."
-    }
-  ]
+  "phase_index": 0,
+  "round_index": 0,
+  "score": 0,
+  "unlocked": []
 }
