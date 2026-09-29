@@ -1,6 +1,12 @@
 {
-  "phase_index": 0,
+  "phase_index": 1,
   "round_index": 0,
-  "score": 0,
-  "unlocked": []
+  "score": 10,
+  "unlocked": [
+    {
+      "phase": "Física",
+      "name": "Marie Curie",
+      "fact": "Pioneira no estudo da radioatividade, descobriu os elementos polônio e rádio. Foi a primeira pessoa a ganhar dois prêmios Nobel em ciências diferentes (Física, 1903, e Química, 1911)."
+    }
+  ]
 }

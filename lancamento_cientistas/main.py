@@ -24,7 +24,10 @@ from settings import (
     ROUNDS_PER_PHASE, TOTAL_PHASES, PIXELS_PER_METER, GRAVITY,
 )
 from entities import Archer, Arrow
-from ui import InputBox, Button, HelpNPC, DialogBox
+from ui import (
+    InputBox, Button, HelpNPC, DialogBox, TrajectoryCalculator,
+    ConfirmationDialog,
+)
 from game_state import GameState
 from data.scientists import get_hint_for_round, get_calculation_hint
 from levels import build_round
@@ -58,6 +61,22 @@ class Game:
 
         self.archer = Archer()
         self.dialog = DialogBox(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.restart_button = Button(
+            SCREEN_WIDTH - 180, 16, 160, 38, "Reiniciar jogo",
+            self.font_small, self._request_restart,
+        )
+        self.quit_button = Button(
+            SCREEN_WIDTH - 135, 60, 115, 34, "Fechar jogo",
+            self.font_small, self._on_quit_click,
+        )
+        self.restart_confirmation = ConfirmationDialog(
+            SCREEN_WIDTH, SCREEN_HEIGHT, self.font_small,
+            self._on_restart_click, self._cancel_restart,
+        )
+        self.calculator = TrajectoryCalculator(
+            SCREEN_WIDTH, SCREEN_HEIGHT, self.font_medium,
+            self._apply_calculator_result,
+        )
 
         self.buttons = []
         self.input_angle = None
@@ -111,7 +130,9 @@ class Game:
         )
         launch_btn = Button(650, SCREEN_HEIGHT - 92, 140, 46, "Lancar!",
                              self.font_medium, self._on_launch_click)
-        self.buttons = [launch_btn]
+        calculator_btn = Button(810, SCREEN_HEIGHT - 92, 170, 46, "Calculadora",
+                    self.font_medium, self._open_calculator)
+        self.buttons = [launch_btn, calculator_btn]
 
         launch_x, launch_y = self.archer.get_launch_point()
         self.help_npc = HelpNPC(launch_x - 10, launch_y - 70, symbol="?")
@@ -149,10 +170,19 @@ class Game:
         self._build_menu_buttons()
 
     def _on_restart_click(self):
+        self.restart_confirmation.hide()
         self.game_state.reset()
         self.layout_index = 0
+        self.arrow = None
+        self.calculator.close()
         self.state = STATE_PHASE_INTRO
         self._build_phase_intro_buttons()
+
+    def _request_restart(self):
+        self.restart_confirmation.show()
+
+    def _cancel_restart(self):
+        self.restart_confirmation.hide()
 
     def _on_launch_click(self):
         if not (self.input_angle.is_valid() and self.input_velocity.is_valid()):
@@ -165,8 +195,25 @@ class Game:
         angle = self.input_angle.get_value()
         velocity = self.input_velocity.get_value()
         launch_x, launch_y = self.archer.get_launch_point()
+        self.archer.fire()
         self.arrow = Arrow(launch_x, launch_y, angle, velocity)
         self.state = STATE_LAUNCHED
+
+    def _open_calculator(self):
+        launch_x, launch_y = self.archer.get_launch_point()
+        distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
+        height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
+        angle = self.input_angle.get_value() or 45
+        velocity = self.input_velocity.get_value() or 20
+        self.calculator.show(distance_m, height_difference_m, angle, velocity)
+
+    def _apply_calculator_result(self, mode, known_value, result_kind, result):
+        known_input = self.input_angle if mode == "speed" else self.input_velocity
+        result_input = self.input_velocity if result_kind == "speed" else self.input_angle
+        for input_box, value in ((known_input, known_value), (result_input, result)):
+            input_box.text = f"{value:.2f}"
+            input_box.active = False
+            input_box.replace_on_next_input = False
 
     # ------------------------------------------------------------ #
     # Fluxo de rodada
@@ -267,6 +314,7 @@ class Game:
         self._draw_text_center(phase["area"], self.font_title, COLOR_ACCENT, 260)
         self._draw_text_center("Acerte as bolhas com o nome das cientistas dessa area!",
                                 self.font_small, COLOR_WHITE, 320)
+        self.restart_button.draw(self.screen)
         for button in self.buttons:
             button.draw(self.screen)
 
@@ -279,6 +327,7 @@ class Game:
             True, COLOR_GRAY,
         )
         self.screen.blit(progress_surf, (20, 52))
+        self.restart_button.draw(self.screen)
 
     def _draw_aiming_or_launched(self):
         self._draw_background()
@@ -291,19 +340,13 @@ class Game:
             obstacle.draw(self.screen)
         self.target.draw(self.screen, self.font_target)
 
-        launch_x, launch_y = self.archer.get_launch_point()
-        distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
-        height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
-        distance_text = (
-            f"Distancia horizontal: {distance_m:.1f} m    "
-            f"Diferenca de altura: {height_difference_m:+.1f} m    g = {GRAVITY:.1f} m/s^2"
-        )
-        distance_surf = self.font_small.render(distance_text, True, COLOR_WHITE)
+        gravity_text = f"g = {GRAVITY:.1f} m/s^2"
+        distance_surf = self.font_small.render(gravity_text, True, COLOR_WHITE)
         self.screen.blit(distance_surf, (SCREEN_WIDTH // 2 - distance_surf.get_width() // 2, 82))
 
         if self.state == STATE_AIMING:
-            self.help_npc.draw(self.screen, self.font_npc)
-            self.calculation_help_npc.draw(self.screen, self.font_npc)
+            # self.help_npc.draw(self.screen, self.font_npc)
+            # self.calculation_help_npc.draw(self.screen, self.font_npc)
             self.input_angle.draw(self.screen)
             self.input_velocity.draw(self.screen)
             for button in self.buttons:
@@ -353,10 +396,17 @@ class Game:
                     pygame.quit()
                     sys.exit()
 
+                if self.state != STATE_MENU:
+                    self.quit_button.handle_event(event)
+
                 if self.dialog.visible:
                     self.dialog.handle_event(event)
                     if not self.dialog.visible and self.result_pending:
                         self._advance_after_result()
+                    continue
+
+                if self.restart_confirmation.visible:
+                    self.restart_confirmation.handle_event(event)
                     continue
 
                 if self.state == STATE_MENU:
@@ -366,23 +416,31 @@ class Game:
                 elif self.state == STATE_PHASE_INTRO:
                     for button in self.buttons:
                         button.handle_event(event)
+                    self.restart_button.handle_event(event)
 
                 elif self.state == STATE_AIMING:
-                    self.input_angle.handle_event(event)
-                    self.input_velocity.handle_event(event)
-                    for button in self.buttons:
-                        button.handle_event(event)
-                    if event.type == pygame.MOUSEBUTTONDOWN and self.help_npc.is_clicked(event.pos):
-                        scientist = self.game_state.current_scientist()
-                        hint = get_hint_for_round(self.game_state.round_index)
-                        self.dialog.show(f"Dica de {scientist['name']}", hint)
-                    elif (event.type == pygame.MOUSEBUTTONDOWN
-                          and self.calculation_help_npc.is_clicked(event.pos)):
-                        launch_x, launch_y = self.archer.get_launch_point()
-                        distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
-                        height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
-                        hint = get_calculation_hint(distance_m, height_difference_m)
-                        self.dialog.show("Dica 2: monte o calculo", hint)
+                    if self.calculator.visible:
+                        self.calculator.handle_event(event)
+                    else:
+                        self.input_angle.handle_event(event)
+                        self.input_velocity.handle_event(event)
+                        for button in self.buttons:
+                            button.handle_event(event)
+                        self.restart_button.handle_event(event)
+                        if event.type == pygame.MOUSEBUTTONDOWN and self.help_npc.is_clicked(event.pos):
+                            scientist = self.game_state.current_scientist()
+                            hint = get_hint_for_round(self.game_state.round_index)
+                            self.dialog.show(f"Dica de {scientist['name']}", hint)
+                        elif (event.type == pygame.MOUSEBUTTONDOWN
+                              and self.calculation_help_npc.is_clicked(event.pos)):
+                            launch_x, launch_y = self.archer.get_launch_point()
+                            distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
+                            height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
+                            hint = get_calculation_hint(distance_m, height_difference_m)
+                            self.dialog.show("Dica 2: monte o calculo", hint)
+
+                elif self.state == STATE_LAUNCHED:
+                    self.restart_button.handle_event(event)
 
                 elif self.state == STATE_GALLERY:
                     for button in self.buttons:
@@ -393,6 +451,8 @@ class Game:
                         button.handle_event(event)
 
             # updates que não dependem de eventos
+            self.archer.update(dt, aiming=self.state == STATE_AIMING)
+            self.calculator.update(dt)
             if self.state == STATE_LAUNCHED and self.arrow and not self.dialog.visible:
                 self._update_launched(dt)
 
@@ -409,6 +469,10 @@ class Game:
                 self._draw_game_over()
 
             self.dialog.draw(self.screen)
+            self.calculator.draw(self.screen)
+            self.restart_confirmation.draw(self.screen)
+            if self.state != STATE_MENU:
+                self.quit_button.draw(self.screen)
             pygame.display.flip()
 
 

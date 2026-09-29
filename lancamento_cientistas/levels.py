@@ -13,7 +13,7 @@ from entities import Obstacle, Target
 # Alvo: (x, y). As coordenadas sao pixels na tela.
 FIXED_SCENARIOS = [
     {
-        "obstacles": [(260, 235, 30, 100)],
+        "obstacles": [(100, 235, 500, 30)],
         "target": (865, 455),
     },
     {
