@@ -1,12 +1,42 @@
 {
-  "phase_index": 1,
+  "phase_index": 7,
   "round_index": 0,
-  "score": 10,
+  "score": 110,
   "unlocked": [
     {
       "phase": "Física",
       "name": "Marie Curie",
       "fact": "Pioneira no estudo da radioatividade, descobriu os elementos polônio e rádio. Foi a primeira pessoa a ganhar dois prêmios Nobel em ciências diferentes (Física, 1903, e Química, 1911)."
+    },
+    {
+      "phase": "Química",
+      "name": "Dorothy Hodgkin",
+      "fact": "Usou cristalografia por raios X para determinar a estrutura da penicilina, da insulina e da vitamina B12. Ganhou o Nobel de Química em 1964."
+    },
+    {
+      "phase": "Biologia e Medicina",
+      "name": "Jane Goodall",
+      "fact": "Primatóloga conhecida por seu estudo de décadas sobre o comportamento de chimpanzés selvagens na Tanzânia."
+    },
+    {
+      "phase": "Matemática e Computação",
+      "name": "Ada Lovelace",
+      "fact": "Escreveu o que é considerado o primeiro algoritmo destinado a ser processado por uma máquina, sendo reconhecida como pioneira da programação."
+    },
+    {
+      "phase": "Astronomia",
+      "name": "Caroline Herschel",
+      "fact": "Descobriu diversos cometas e foi a primeira mulher a receber um salário como cientista, no Reino Unido."
+    },
+    {
+      "phase": "Geologia e Ciências da Terra",
+      "name": "Inge Lehmann",
+      "fact": "Sismóloga dinamarquesa que, em 1936, apresentou evidências de que a Terra possui um núcleo interno sólido."
+    },
+    {
+      "phase": "Engenharia",
+      "name": "Emily Warren Roebling",
+      "fact": "Assumiu responsabilidades centrais de supervisão na construção da Ponte do Brooklyn, concluída em 1883."
     }
   ]
 }

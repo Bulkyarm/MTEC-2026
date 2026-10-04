@@ -43,11 +43,21 @@ class InputBox:
             elif event.key in (pygame.K_RETURN, pygame.K_TAB):
                 self.active = False
             elif event.unicode.isdigit() or (event.unicode == "." and "." not in self.text):
+                new_text = event.unicode if self.replace_on_next_input else self.text + event.unicode
+                try:
+                    exceeds_max = (
+                        self.max_value is not None
+                        and float(new_text) > self.max_value
+                    )
+                except ValueError:
+                    exceeds_max = False
+                if exceeds_max:
+                    return
                 if self.replace_on_next_input:
-                    self.text = event.unicode
+                    self.text = new_text
                     self.replace_on_next_input = False
                 else:
-                    self.text += event.unicode
+                    self.text = new_text
 
     def get_value(self):
         try:
@@ -138,6 +148,7 @@ class DialogBox:
         self.message = ""
         self.width = int(screen_width * 0.7)
         self.height = 208
+        self.screen_height = screen_height
         self.x = (screen_width - self.width) // 2
         self.y = screen_height - self.height - 30
         self.title_font = pygame.font.SysFont("arial", 22, bold=True)
@@ -156,23 +167,33 @@ class DialogBox:
             self.hide()
 
     def _wrap_text(self, text, max_width):
-        words = text.split(" ")
         lines = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if self.text_font.size(test)[0] <= max_width:
-                current = test
-            else:
+        for paragraph in text.split("\n"):
+            words = paragraph.split()
+            if not words:
+                lines.append("")
+                continue
+            current = ""
+            for word in words:
+                test = f"{current} {word}".strip()
+                if self.text_font.size(test)[0] <= max_width:
+                    current = test
+                else:
+                    lines.append(current)
+                    current = word
+            if current:
                 lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
         return lines
 
     def draw(self, surface):
         if not self.visible:
             return
+        lines = self._wrap_text(self.message, self.width - 40)
+        self.height = min(
+            self.screen_height - 60,
+            max(208, 88 + 24 * len(lines)),
+        )
+        self.y = self.screen_height - self.height - 30
         rect = pygame.Rect(self.x, self.y, self.width, self.height)
         pygame.draw.rect(surface, COLOR_DIALOG_BG, rect, border_radius=10)
         pygame.draw.rect(surface, COLOR_ACCENT, rect, width=2, border_radius=10)
@@ -180,8 +201,8 @@ class DialogBox:
         title_surf = self.title_font.render(self.title, True, COLOR_ACCENT)
         surface.blit(title_surf, (self.x + 20, self.y + 14))
 
-        lines = self._wrap_text(self.message, self.width - 40)
-        for i, line in enumerate(lines[:6]):
+        max_lines = max(1, (self.height - 84) // 24)
+        for i, line in enumerate(lines[:max_lines]):
             line_surf = self.text_font.render(line, True, COLOR_WHITE)
             surface.blit(line_surf, (self.x + 20, self.y + 48 + i * 24))
 

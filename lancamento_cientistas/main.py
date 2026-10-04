@@ -9,8 +9,8 @@ Execução:
 
 Controles:
     - Digite o ângulo (graus) e a velocidade inicial nos campos de texto.
-    - Clique no "?" ao lado do arqueiro para ver uma dica de fórmula da
-      cientista da rodada atual.
+    - As duas dicas aparecem automaticamente antes da terceira tentativa.
+    - A calculadora fica disponível na quarta tentativa.
     - Clique em "Lançar!" para disparar a flecha.
 """
 
@@ -22,14 +22,15 @@ from settings import (
     COLOR_WHITE, COLOR_ACCENT, COLOR_GRAY, COLOR_SUCCESS, COLOR_FAIL,
     GROUND_Y, MIN_ANGLE, MAX_ANGLE, MIN_VELOCITY, MAX_VELOCITY,
     ROUNDS_PER_PHASE, TOTAL_PHASES, PIXELS_PER_METER, GRAVITY,
+    DEVELOPER_MODE_ENABLED,
 )
 from entities import Archer, Arrow
 from ui import (
-    InputBox, Button, HelpNPC, DialogBox, TrajectoryCalculator,
+    InputBox, Button, DialogBox, TrajectoryCalculator,
     ConfirmationDialog,
 )
 from game_state import GameState
-from data.scientists import get_hint_for_round, get_calculation_hint
+from data.scientists import PHASES, get_hint_for_round, get_calculation_hint
 from levels import build_round
 
 # ---------------------------------------------------------------- #
@@ -38,7 +39,7 @@ STATE_MENU = "menu"
 STATE_PHASE_INTRO = "phase_intro"
 STATE_AIMING = "aiming"
 STATE_LAUNCHED = "launched"
-STATE_GALLERY = "gallery"
+STATE_DEV_MODE = "developer_mode"
 STATE_GAME_OVER = "game_over"
 
 
@@ -81,11 +82,10 @@ class Game:
         self.buttons = []
         self.input_angle = None
         self.input_velocity = None
-        self.help_npc = None
-        self.calculation_help_npc = None
         self.obstacles = []
         self.target = None
         self.arrow = None
+        self.attempt_count = 0
         self.result_message = None
         self.last_result_success = False
         self.result_pending = False
@@ -101,15 +101,32 @@ class Game:
         cx = SCREEN_WIDTH // 2 - 110
         self.buttons = [
             Button(cx, 260, 220, 50, "Iniciar Jogo", self.font_medium, self._on_start_click),
-            Button(cx, 325, 220, 50, "Galeria", self.font_medium, self._on_gallery_click),
-            Button(cx, 390, 220, 50, "Sair", self.font_medium, self._on_quit_click),
         ]
+        if DEVELOPER_MODE_ENABLED:
+            self.buttons.append(Button(
+                cx, 325, 220, 50, "Modo Desenvolvedor", self.font_medium,
+                self._on_dev_mode_click,
+            ))
+        quit_y = 390 if DEVELOPER_MODE_ENABLED else 325
+        self.buttons.append(
+            Button(cx, quit_y, 220, 50, "Sair", self.font_medium, self._on_quit_click)
+        )
 
-    def _build_gallery_buttons(self):
-        self.buttons = [
-            Button(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 70, 180, 44,
-                   "Voltar ao Menu", self.font_medium, self._on_back_to_menu),
-        ]
+    def _build_dev_mode_buttons(self):
+        self.buttons = []
+        for phase_index in range(TOTAL_PHASES):
+            row = phase_index // 3
+            column = phase_index % 3 if row < 2 else 1
+            x = SCREEN_WIDTH // 2 - 354 + column * 244
+            y = 150 + row * 112
+            self.buttons.append(Button(
+                x, y, 220, 50, f"Fase {phase_index + 1}", self.font_medium,
+                lambda phase_index=phase_index: self._select_dev_phase(phase_index),
+            ))
+        self.buttons.append(Button(
+            SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 70, 180, 44,
+            "Voltar ao Menu", self.font_medium, self._on_back_to_menu,
+        ))
 
     def _build_phase_intro_buttons(self):
         self.buttons = [
@@ -128,15 +145,17 @@ class Game:
             initial_text="20", font=self.font_medium,
             min_value=MIN_VELOCITY, max_value=MAX_VELOCITY,
         )
-        launch_btn = Button(650, SCREEN_HEIGHT - 92, 140, 46, "Lancar!",
-                             self.font_medium, self._on_launch_click)
-        calculator_btn = Button(810, SCREEN_HEIGHT - 92, 170, 46, "Calculadora",
-                    self.font_medium, self._open_calculator)
-        self.buttons = [launch_btn, calculator_btn]
+        self._refresh_aiming_buttons()
 
-        launch_x, launch_y = self.archer.get_launch_point()
-        self.help_npc = HelpNPC(launch_x - 10, launch_y - 70, symbol="?")
-        self.calculation_help_npc = HelpNPC(launch_x + 55, launch_y - 70, symbol="=")
+    def _refresh_aiming_buttons(self):
+        launch_btn = Button(650, SCREEN_HEIGHT - 92, 140, 46, "Lancar!",
+                            self.font_medium, self._on_launch_click)
+        self.buttons = [launch_btn]
+        if self.attempt_count >= 3:
+            self.buttons.append(Button(
+                810, SCREEN_HEIGHT - 92, 170, 46, "Calculadora",
+                self.font_medium, self._open_calculator,
+            ))
 
     def _build_game_over_buttons(self):
         self.buttons = [
@@ -157,9 +176,21 @@ class Game:
         self.state = STATE_PHASE_INTRO
         self._build_phase_intro_buttons()
 
-    def _on_gallery_click(self):
-        self.state = STATE_GALLERY
-        self._build_gallery_buttons()
+    def _on_dev_mode_click(self):
+        if not DEVELOPER_MODE_ENABLED:
+            return
+        self.state = STATE_DEV_MODE
+        self._build_dev_mode_buttons()
+
+    def _select_dev_phase(self, phase_index):
+        if not DEVELOPER_MODE_ENABLED:
+            return
+        self.game_state.phase_index = phase_index
+        self.game_state.round_index = 0
+        self.arrow = None
+        self.result_pending = False
+        self.calculator.close()
+        self._start_round()
 
     def _on_quit_click(self):
         pygame.quit()
@@ -195,8 +226,11 @@ class Game:
         angle = self.input_angle.get_value()
         velocity = self.input_velocity.get_value()
         launch_x, launch_y = self.archer.get_launch_point()
+        self.attempt_count += 1
         self.archer.fire()
         self.arrow = Arrow(launch_x, launch_y, angle, velocity)
+        if self.game_state.phase_index == 6:
+            self.target.start_falling()
         self.state = STATE_LAUNCHED
 
     def _open_calculator(self):
@@ -221,6 +255,7 @@ class Game:
 
     def _start_round(self):
         scientist = self.game_state.current_scientist()
+        self.attempt_count = 0
         self.layout_index += 1
         self.obstacles, self.target = build_round(
             self.game_state.phase_index, self.game_state.round_index, scientist["name"],
@@ -241,12 +276,38 @@ class Game:
                 scientist["fact"],
             )
         else:
+            if self.attempt_count >= 4:
+                if self.game_state.phase_index == 0:
+                    reason += " O jogo sera reiniciado."
+                else:
+                    reason += " Voce voltara ao inicio da fase anterior."
             self.dialog.show("Tente novamente", reason)
 
     def _advance_after_result(self):
         self.result_pending = False
         if not self.last_result_success:
-            self._start_round()
+            if self.attempt_count >= 4:
+                if self.game_state.phase_index == 0:
+                    self.game_state.reset()
+                    self.layout_index = 0
+                else:
+                    self.game_state.return_to_previous_phase()
+                self.state = STATE_PHASE_INTRO
+                self._build_phase_intro_buttons()
+                return
+
+            self.state = STATE_AIMING
+            self._refresh_aiming_buttons()
+            if self.attempt_count == 2:
+                launch_x, launch_y = self.archer.get_launch_point()
+                distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
+                height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
+                scientist = self.game_state.current_scientist()
+                hints = (
+                    f"1. {get_hint_for_round(self.game_state.round_index)}\n\n"
+                    f"2. {get_calculation_hint(distance_m, height_difference_m)}"
+                )
+                self.dialog.show(f"Dicas de {scientist['name']}", hints)
             return
 
         still_playing = self.game_state.advance_round()
@@ -265,6 +326,8 @@ class Game:
 
     def _update_launched(self, dt):
         self.arrow.update(dt)
+        if self.game_state.phase_index == 6:
+            self.target.update(dt)
         px, py = self.arrow.get_pos()
 
         # colisão com obstáculo
@@ -327,6 +390,11 @@ class Game:
             True, COLOR_GRAY,
         )
         self.screen.blit(progress_surf, (20, 52))
+        attempts_surf = self.font_small.render(
+            f"Tentativa {min(self.attempt_count + 1, 4)}/4",
+            True, COLOR_GRAY,
+        )
+        self.screen.blit(attempts_surf, (20, 78))
         self.restart_button.draw(self.screen)
 
     def _draw_aiming_or_launched(self):
@@ -354,24 +422,18 @@ class Game:
         elif self.state == STATE_LAUNCHED and self.arrow:
             self.arrow.draw(self.screen)
 
-    def _draw_gallery(self):
+    def _draw_dev_mode(self):
         self._draw_background()
-        self._draw_text_center("Galeria de Cientistas", self.font_title, COLOR_ACCENT, 50)
+        self._draw_text_center("Modo Desenvolvedor", self.font_title, COLOR_ACCENT, 65)
+        self._draw_text_center("Selecione uma fase", self.font_small, COLOR_GRAY, 108)
 
-        unlocked = self.game_state.unlocked
-        if not unlocked:
-            self._draw_text_center("Nenhuma cientista desbloqueada ainda. Va jogar!",
-                                    self.font_small, COLOR_GRAY, 120)
-        else:
-            y = 100
-            for entry in unlocked[:8]:
-                line = f"{entry['name']} ({entry['phase']})"
-                surf = self.font_small.render(line, True, COLOR_WHITE)
-                self.screen.blit(surf, (60, y))
-                y += 30
-
-        for button in self.buttons:
+        for phase_index, phase in enumerate(PHASES):
+            button = self.buttons[phase_index]
             button.draw(self.screen)
+            label = self.font_small.render(phase["area"], True, COLOR_WHITE)
+            self.screen.blit(label, label.get_rect(center=(button.rect.centerx, button.rect.bottom + 18)))
+
+        self.buttons[-1].draw(self.screen)
 
     def _draw_game_over(self):
         self._draw_background()
@@ -427,22 +489,11 @@ class Game:
                         for button in self.buttons:
                             button.handle_event(event)
                         self.restart_button.handle_event(event)
-                        if event.type == pygame.MOUSEBUTTONDOWN and self.help_npc.is_clicked(event.pos):
-                            scientist = self.game_state.current_scientist()
-                            hint = get_hint_for_round(self.game_state.round_index)
-                            self.dialog.show(f"Dica de {scientist['name']}", hint)
-                        elif (event.type == pygame.MOUSEBUTTONDOWN
-                              and self.calculation_help_npc.is_clicked(event.pos)):
-                            launch_x, launch_y = self.archer.get_launch_point()
-                            distance_m = (self.target.x - launch_x) / PIXELS_PER_METER
-                            height_difference_m = (launch_y - self.target.y) / PIXELS_PER_METER
-                            hint = get_calculation_hint(distance_m, height_difference_m)
-                            self.dialog.show("Dica 2: monte o calculo", hint)
 
                 elif self.state == STATE_LAUNCHED:
                     self.restart_button.handle_event(event)
 
-                elif self.state == STATE_GALLERY:
+                elif self.state == STATE_DEV_MODE:
                     for button in self.buttons:
                         button.handle_event(event)
 
@@ -463,8 +514,8 @@ class Game:
                 self._draw_phase_intro()
             elif self.state in (STATE_AIMING, STATE_LAUNCHED):
                 self._draw_aiming_or_launched()
-            elif self.state == STATE_GALLERY:
-                self._draw_gallery()
+            elif self.state == STATE_DEV_MODE:
+                self._draw_dev_mode()
             elif self.state == STATE_GAME_OVER:
                 self._draw_game_over()
 

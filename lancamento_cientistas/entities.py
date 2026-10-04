@@ -12,6 +12,7 @@ import pygame
 from settings import (
     COLOR_ACCENT, COLOR_OBSTACLE, COLOR_TARGET, COLOR_TARGET_HIT,
     COLOR_WHITE, COLOR_BLACK, ARCHER_X, ARCHER_Y, GROUND_Y,
+    GRAVITY, PIXELS_PER_METER,
 )
 from physics import Projectile
 
@@ -142,10 +143,39 @@ class Archer:
 class Obstacle:
     """Bloco/parede vertical que a flecha precisa transpor."""
 
-    def __init__(self, x, y, width, height):
+    def __init__(self, x, y, width, height, angle=0):
         self.rect = pygame.Rect(x, y, width, height)
+        self.angle = angle
+        self.points = self._polygon_points()
+
+    def _polygon_points(self, inset=0):
+        center_x, center_y = self.rect.center
+        half_width = self.rect.width / 2 - inset
+        half_height = self.rect.height / 2 - inset
+        angle_rad = math.radians(self.angle)
+        cos_angle = math.cos(angle_rad)
+        sin_angle = math.sin(angle_rad)
+        corners = [
+            (-half_width, -half_height),
+            (half_width, -half_height),
+            (half_width, half_height),
+            (-half_width, half_height),
+        ]
+        return [
+            (
+                round(center_x + x * cos_angle - y * sin_angle),
+                round(center_y + x * sin_angle + y * cos_angle),
+            )
+            for x, y in corners
+        ]
 
     def draw(self, surface):
+        if self.angle:
+            pygame.draw.polygon(surface, COLOR_OBSTACLE, self.points)
+            pygame.draw.polygon(surface, (151, 108, 76), self._polygon_points(3))
+            pygame.draw.polygon(surface, COLOR_BLACK, self.points, width=2)
+            return
+
         pygame.draw.rect(surface, COLOR_OBSTACLE, self.rect, border_radius=3)
         pygame.draw.rect(surface, (151, 108, 76), self.rect.inflate(-5, -5), border_radius=2)
         brick_height = 18
@@ -163,30 +193,72 @@ class Obstacle:
         pygame.draw.rect(surface, COLOR_BLACK, self.rect, width=2, border_radius=3)
 
     def collides_with_point(self, px, py, radius=6):
-        return self.rect.collidepoint(px, py) or self.rect.inflate(radius, radius).collidepoint(px, py)
+        if not self.angle:
+            return self.rect.collidepoint(px, py) or self.rect.inflate(radius, radius).collidepoint(px, py)
+
+        inside = False
+        previous = self.points[-1]
+        for current in self.points:
+            x1, y1 = previous
+            x2, y2 = current
+            if (y1 > py) != (y2 > py):
+                crossing_x = (x2 - x1) * (py - y1) / (y2 - y1) + x1
+                if px < crossing_x:
+                    inside = not inside
+
+            segment_x = x2 - x1
+            segment_y = y2 - y1
+            segment_length_sq = segment_x ** 2 + segment_y ** 2
+            projection = 0 if not segment_length_sq else max(
+                0, min(1, ((px - x1) * segment_x + (py - y1) * segment_y) / segment_length_sq)
+            )
+            closest_x = x1 + projection * segment_x
+            closest_y = y1 + projection * segment_y
+            if (px - closest_x) ** 2 + (py - closest_y) ** 2 <= radius ** 2:
+                return True
+            previous = current
+
+        return inside
 
 
 class Target:
     """A bolha-alvo contendo o nome da cientista da rodada atual."""
 
-    def __init__(self, x, y, name, radius=32):
+    def __init__(self, x, y, name, radius=32, fall_speed_multiplier=1.0):
         self.x = x
         self.y = y
+        self.initial_y = y
         self.name = name
         self.radius = radius
+        self.fall_speed_multiplier = fall_speed_multiplier
         self.hit = False
+        self.falling = False
+        self.fall_elapsed = 0.0
+
+    def start_falling(self):
+        self.y = self.initial_y
+        self.fall_elapsed = 0.0
+        self.falling = True
+
+    def update(self, dt):
+        if not self.falling:
+            return
+        self.fall_elapsed += dt
+        acceleration_px = GRAVITY * PIXELS_PER_METER * self.fall_speed_multiplier
+        self.y = self.initial_y + 0.5 * acceleration_px * self.fall_elapsed ** 2
 
     def draw(self, surface, font):
         color = COLOR_TARGET_HIT if self.hit else COLOR_TARGET
-        pygame.draw.circle(surface, color, (self.x, self.y), self.radius)
-        pygame.draw.circle(surface, (255, 168, 197), (self.x - 10, self.y - 11), 7)
+        center_x, center_y = round(self.x), round(self.y)
+        pygame.draw.circle(surface, color, (center_x, center_y), self.radius)
+        pygame.draw.circle(surface, (255, 168, 197), (center_x - 10, center_y - 11), 7)
         pygame.draw.arc(
             surface, (255, 212, 226),
-            (self.x - self.radius + 7, self.y - self.radius + 7,
+            (center_x - self.radius + 7, center_y - self.radius + 7,
              self.radius * 2 - 14, self.radius * 2 - 14),
             math.radians(25), math.radians(155), 3,
         )
-        pygame.draw.circle(surface, COLOR_BLACK, (self.x, self.y), self.radius, width=2)
+        pygame.draw.circle(surface, COLOR_BLACK, (center_x, center_y), self.radius, width=2)
 
         # nome da cientista, quebrado em até duas linhas se necessário
         words = self.name.split(" ")
@@ -195,9 +267,9 @@ class Target:
         text1 = font.render(line1, True, COLOR_WHITE)
         text2 = font.render(line2, True, COLOR_WHITE) if line2 else None
 
-        surface.blit(text1, text1.get_rect(center=(self.x, self.y - 8)))
+        surface.blit(text1, text1.get_rect(center=(center_x, center_y - 8)))
         if text2:
-            surface.blit(text2, text2.get_rect(center=(self.x, self.y + 10)))
+            surface.blit(text2, text2.get_rect(center=(center_x, center_y + 10)))
 
     def collides_with_point(self, px, py):
         dist_sq = (px - self.x) ** 2 + (py - self.y) ** 2

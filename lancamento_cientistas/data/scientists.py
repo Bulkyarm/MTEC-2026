@@ -1,5 +1,5 @@
 """
-Base de dados das cientistas do jogo, organizadas em 5 fases (áreas da ciência).
+Base de dados das cientistas do jogo, organizadas em 7 fases (áreas da ciência).
 Cada fase tem 5 cientistas. Cada cientista é o "alvo" de uma rodada e também
 quem fornece, através do balão de diálogo (NPC/botão de ajuda), uma dica de
 fórmula de lançamento oblíquo para aquela rodada.
@@ -190,6 +190,58 @@ PHASES = [
                 "name": "Jocelyn Bell Burnell",
                 "fact": "Descobriu os primeiros pulsares (estrelas de nêutrons "
                         "em rotação), um marco importante da radioastronomia.",
+            },
+        ],
+    },
+    {
+        "area": "Geologia e Ciências da Terra",
+        "cor_tema": (76, 180, 170),
+        "scientists": [
+            {
+                "name": "Inge Lehmann",
+                "fact": "Sismóloga dinamarquesa que, em 1936, apresentou evidências de que a Terra possui um núcleo interno sólido.",
+            },
+            {
+                "name": "Marie Tharp",
+                "fact": "Geóloga e cartógrafa que ajudou a criar o primeiro mapa detalhado do fundo do oceano Atlântico e revelou a dorsal mesoatlântica.",
+            },
+            {
+                "name": "Florence Bascom",
+                "fact": "Geóloga pioneira, foi uma das primeiras mulheres a trabalhar para o Serviço Geológico dos Estados Unidos.",
+            },
+            {
+                "name": "Eunice Newton Foote",
+                "fact": "Cientista que realizou experimentos em 1856 mostrando que o dióxido de carbono aquece mais ao receber radiação solar.",
+            },
+            {
+                "name": "Alice Wilson",
+                "fact": "Geóloga canadense que pesquisou a geologia do vale do rio Ottawa e foi a primeira geóloga mulher do Serviço Geológico do Canadá.",
+            },
+        ],
+    },
+    {
+        "area": "Engenharia",
+        "cor_tema": (201, 170, 76),
+        "scientists": [
+            {
+                "name": "Emily Warren Roebling",
+                "fact": "Assumiu responsabilidades centrais de supervisão na construção da Ponte do Brooklyn, concluída em 1883.",
+            },
+            {
+                "name": "Edith Clarke",
+                "fact": "Engenheira elétrica que desenvolveu métodos de cálculo para sistemas de energia e se tornou professora de engenharia na Universidade do Texas.",
+            },
+            {
+                "name": "Beatrice Shilling",
+                "fact": "Engenheira aeronáutica britânica que desenvolveu uma solução para melhorar o funcionamento dos motores de aviões de combate durante a Segunda Guerra Mundial.",
+            },
+            {
+                "name": "Hedy Lamarr",
+                "fact": "Atriz e inventora que, com George Antheil, patenteou um sistema de salto de frequência para orientar torpedos por rádio.",
+            },
+            {
+                "name": "Elsie MacGill",
+                "fact": "Engenheira aeronáutica canadense, foi a primeira mulher a obter diploma nessa área e liderou a produção de aviões Hawker Hurricane no Canadá.",
             },
         ],
     },

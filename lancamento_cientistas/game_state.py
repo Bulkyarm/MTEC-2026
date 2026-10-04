@@ -47,6 +47,12 @@ class GameState:
         self.save()
         return self.phase_index < TOTAL_PHASES
 
+    def return_to_previous_phase(self):
+        """Retorna ao início da fase anterior, preservando pontuação e galeria."""
+        self.phase_index = max(0, self.phase_index - 1)
+        self.round_index = 0
+        self.save()
+
     def is_game_complete(self):
         return self.phase_index >= TOTAL_PHASES
 

@@ -42,7 +42,10 @@ ARCHER_Y = SCREEN_HEIGHT - 120
 GROUND_Y = SCREEN_HEIGHT - 80
 
 ROUNDS_PER_PHASE = 1
-TOTAL_PHASES = 5
+TOTAL_PHASES = 7
 POINTS_PER_HIT = 10
+
+# ---------- Recursos ----------
+DEVELOPER_MODE_ENABLED = True
 
 SAVE_FILE = "save/progresso.json"
