@@ -146,6 +146,9 @@ class DialogBox:
         self.visible = False
         self.title = ""
         self.message = ""
+        self.portrait = None
+        self.illustration = None
+        self.anchor = "bottom"
         self.width = int(screen_width * 0.7)
         self.height = 208
         self.screen_height = screen_height
@@ -154,13 +157,19 @@ class DialogBox:
         self.title_font = pygame.font.SysFont("arial", 22, bold=True)
         self.text_font = pygame.font.SysFont("arial", 18)
 
-    def show(self, title, message):
+    def show(self, title, message, portrait=None, anchor="bottom", illustration=None):
         self.title = title
         self.message = message
+        self.portrait = portrait
+        self.illustration = illustration
+        self.anchor = anchor
         self.visible = True
 
     def hide(self):
         self.visible = False
+        self.portrait = None
+        self.illustration = None
+        self.anchor = "bottom"
 
     def handle_event(self, event):
         if self.visible and event.type == pygame.MOUSEBUTTONDOWN:
@@ -188,12 +197,19 @@ class DialogBox:
     def draw(self, surface):
         if not self.visible:
             return
-        lines = self._wrap_text(self.message, self.width - 40)
+        text_left = 130 if self.portrait else 20
+        reserved_right = 165 if self.illustration else 0
+        lines = self._wrap_text(
+            self.message, self.width - text_left - 20 - reserved_right,
+        )
         self.height = min(
             self.screen_height - 60,
             max(208, 88 + 24 * len(lines)),
         )
-        self.y = self.screen_height - self.height - 30
+        self.y = (
+            20 if self.anchor == "top"
+            else self.screen_height - self.height - 30
+        )
         rect = pygame.Rect(self.x, self.y, self.width, self.height)
         pygame.draw.rect(surface, COLOR_DIALOG_BG, rect, border_radius=10)
         pygame.draw.rect(surface, COLOR_ACCENT, rect, width=2, border_radius=10)
@@ -201,10 +217,22 @@ class DialogBox:
         title_surf = self.title_font.render(self.title, True, COLOR_ACCENT)
         surface.blit(title_surf, (self.x + 20, self.y + 14))
 
+        if self.portrait:
+            portrait_rect = self.portrait.get_rect(
+                center=(self.x + 72, self.y + self.height // 2)
+            )
+            surface.blit(self.portrait, portrait_rect)
+
+        if self.illustration:
+            illustration_rect = self.illustration.get_rect(
+                center=(self.x + self.width - 82, self.y + self.height // 2)
+            )
+            surface.blit(self.illustration, illustration_rect)
+
         max_lines = max(1, (self.height - 84) // 24)
         for i, line in enumerate(lines[:max_lines]):
             line_surf = self.text_font.render(line, True, COLOR_WHITE)
-            surface.blit(line_surf, (self.x + 20, self.y + 48 + i * 24))
+            surface.blit(line_surf, (self.x + text_left, self.y + 48 + i * 24))
 
         hint_surf = self.text_font.render("(clique em qualquer lugar para fechar)", True, COLOR_GRAY)
         surface.blit(hint_surf, (self.x + 20, self.y + self.height - 26))

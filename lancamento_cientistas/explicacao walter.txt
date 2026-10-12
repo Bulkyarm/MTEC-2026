@@ -1,0 +1,10 @@
+# As fases já foram editadas e estão conforme a ultima decisão, agora só resta a contextualização das fases.
+
+#Estamos trabalhando nisso agora.
+
+#esse é o atual estado do jogo.
+
+
+#A fase 1 já está quase pronta, só faltam as dimensoes, ajustes finos etc....
+
+Fase 7 o alvo cai.

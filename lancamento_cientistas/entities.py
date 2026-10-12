@@ -80,6 +80,9 @@ class Archer:
         pygame.draw.line(surface, (20, 20, 25),
                          (self.x + 8, self.y + 18), (self.x + 20, self.y + 18), 5)
 
+        self.draw_bow(surface, aim_angle_deg, draw_arms=True)
+
+    def draw_bow(self, surface, aim_angle_deg=45, draw_arms=False):
         angle_rad = math.radians(aim_angle_deg)
         aim_direction = (math.cos(angle_rad), -math.sin(angle_rad))
         perpendicular = (math.sin(angle_rad), math.cos(angle_rad))
@@ -105,39 +108,55 @@ class Archer:
             string_rest[0] - aim_direction[0] * draw_distance,
             string_rest[1] - aim_direction[1] * draw_distance,
         )
-        bow_shoulder = (self.x + 5, body_rect.top + 16)
-        draw_shoulder = (self.x - 7, body_rect.top + 21)
-        arm_dx = string_center[0] - draw_shoulder[0]
-        arm_dy = string_center[1] - draw_shoulder[1]
-        arm_length = max(1, math.hypot(arm_dx, arm_dy))
-        elbow_bend = (-arm_dy / arm_length, arm_dx / arm_length)
-        if elbow_bend[0] > 0:
-            elbow_bend = (-elbow_bend[0], -elbow_bend[1])
-        elbow_offset = 6 + 7 * self.draw_progress
-        elbow = (
-            draw_shoulder[0] + arm_dx * 0.48 + elbow_bend[0] * elbow_offset,
-            draw_shoulder[1] + arm_dy * 0.48 + elbow_bend[1] * elbow_offset,
-        )
+        if draw_arms:
+            body_top = self.y - self.height
+            bow_shoulder = (self.x + 5, body_top + 16)
+            draw_shoulder = (self.x - 7, body_top + 21)
+            arm_dx = string_center[0] - draw_shoulder[0]
+            arm_dy = string_center[1] - draw_shoulder[1]
+            arm_length = max(1, math.hypot(arm_dx, arm_dy))
+            elbow_bend = (-arm_dy / arm_length, arm_dx / arm_length)
+            if elbow_bend[0] > 0:
+                elbow_bend = (-elbow_bend[0], -elbow_bend[1])
+            elbow_offset = 6 + 7 * self.draw_progress
+            elbow = (
+                draw_shoulder[0] + arm_dx * 0.48 + elbow_bend[0] * elbow_offset,
+                draw_shoulder[1] + arm_dy * 0.48 + elbow_bend[1] * elbow_offset,
+            )
 
-        pygame.draw.line(surface, (224, 168, 126), bow_shoulder, grip, 8)
-        pygame.draw.line(surface, (245, 195, 151),
-                         (bow_shoulder[0] + 3, bow_shoulder[1] - 2), grip, 3)
-        pygame.draw.line(surface, (224, 168, 126), draw_shoulder, elbow, 8)
-        pygame.draw.line(surface, (224, 168, 126), elbow, string_center, 7)
-        pygame.draw.line(surface, (245, 195, 151),
-                         (draw_shoulder[0] + 2, draw_shoulder[1] - 2), elbow, 3)
-        pygame.draw.line(surface, (245, 195, 151),
-                         (elbow[0] + 1, elbow[1] - 1), string_center, 2)
+            pygame.draw.line(surface, (224, 168, 126), bow_shoulder, grip, 8)
+            pygame.draw.line(surface, (245, 195, 151),
+                             (bow_shoulder[0] + 3, bow_shoulder[1] - 2), grip, 3)
+            pygame.draw.line(surface, (224, 168, 126), draw_shoulder, elbow, 8)
+            pygame.draw.line(surface, (224, 168, 126), elbow, string_center, 7)
+            pygame.draw.line(surface, (245, 195, 151),
+                             (draw_shoulder[0] + 2, draw_shoulder[1] - 2), elbow, 3)
+            pygame.draw.line(surface, (245, 195, 151),
+                             (elbow[0] + 1, elbow[1] - 1), string_center, 2)
 
         pygame.draw.line(surface, (235, 220, 175), bow_points[0], bow_points[-1], 2)
         pygame.draw.line(surface, (235, 220, 175), bow_points[0], string_center, 1)
         pygame.draw.line(surface, (235, 220, 175), string_center, bow_points[-1], 1)
-        pygame.draw.circle(surface, (224, 168, 126), elbow, 5)
-        pygame.draw.circle(surface, (224, 168, 126), grip, 5)
-        pygame.draw.circle(surface, (224, 168, 126), string_center, 4)
+        if draw_arms:
+            pygame.draw.circle(surface, (224, 168, 126), elbow, 5)
+            pygame.draw.circle(surface, (224, 168, 126), grip, 5)
+            pygame.draw.circle(surface, (224, 168, 126), string_center, 4)
 
     def get_launch_point(self):
         return self.x, self.y - self.height // 2
+
+    def get_bow_launch_point(self, aim_angle_deg=45):
+        angle_rad = math.radians(aim_angle_deg)
+        aim_direction = (math.cos(angle_rad), -math.sin(angle_rad))
+        string_rest = (
+            self.x + 29,
+            self.y - self.height // 2 - 4,
+        )
+        draw_distance = 20 * self.draw_progress
+        return (
+            string_rest[0] - aim_direction[0] * draw_distance,
+            string_rest[1] - aim_direction[1] * draw_distance,
+        )
 
 
 class Obstacle:
@@ -168,6 +187,10 @@ class Obstacle:
             )
             for x, y in corners
         ]
+
+    def set_y(self, y):
+        self.rect.y = round(y)
+        self.points = self._polygon_points()
 
     def draw(self, surface):
         if self.angle:

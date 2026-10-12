@@ -194,12 +194,14 @@ PHASES = [
         ],
     },
     {
-        "area": "Geologia e Ciências da Terra",
-        "cor_tema": (76, 180, 170),
+        "area": "Biologia e Genética",
+        "cor_tema": (76, 201, 120),
         "scientists": [
             {
-                "name": "Inge Lehmann",
-                "fact": "Sismóloga dinamarquesa que, em 1936, apresentou evidências de que a Terra possui um núcleo interno sólido.",
+                "name": "Barbara McClintock",
+                "fact": "Geneticista que descobriu os transposons, segmentos de DNA capazes "
+                        "de mudar de posição no genoma e influenciar a atividade dos genes. "
+                        "Recebeu o Nobel de Medicina em 1983.",
             },
             {
                 "name": "Marie Tharp",
@@ -220,12 +222,13 @@ PHASES = [
         ],
     },
     {
-        "area": "Engenharia",
+        "area": "Biologia e Primatologia",
         "cor_tema": (201, 170, 76),
         "scientists": [
             {
-                "name": "Emily Warren Roebling",
-                "fact": "Assumiu responsabilidades centrais de supervisão na construção da Ponte do Brooklyn, concluída em 1883.",
+                "name": "Jane Goodall",
+                "fact": "Primatóloga conhecida por seu estudo de décadas sobre o "
+                        "comportamento de chimpanzés selvagens na Tanzânia.",
             },
             {
                 "name": "Edith Clarke",
