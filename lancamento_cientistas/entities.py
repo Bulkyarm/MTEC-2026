@@ -1,16 +1,15 @@
 """
-Entidades desenháveis do jogo: Arqueiro, Flecha (wrapper visual do Projectile),
-Obstáculo e Alvo (bolha da cientista).
+Entidades desenháveis do jogo: Arqueiro animado a partir do sprite em assets,
+Flecha (wrapper visual do Projectile), Obstáculo e Alvo (bolha da cientista).
 
-Como não há imagens/sprites externos no projeto, tudo é desenhado com
-primitivas do Pygame (retângulos, círculos, linhas), o que também facilita
-ajustar cores e estilo depois.
+As demais entidades continuam desenhadas com primitivas do Pygame.
 """
 
 import math
+import os
 import pygame
 from settings import (
-    COLOR_ACCENT, COLOR_OBSTACLE, COLOR_TARGET, COLOR_TARGET_HIT,
+    COLOR_OBSTACLE, COLOR_TARGET, COLOR_TARGET_HIT,
     COLOR_WHITE, COLOR_BLACK, ARCHER_X, ARCHER_Y, GROUND_Y,
     GRAVITY, PIXELS_PER_METER,
 )
@@ -20,67 +19,115 @@ from physics import Projectile
 class Archer:
     """Representa o atirador, fixo do lado esquerdo da tela."""
 
+    FRAME_SIZE = (130, 130)
+    IDLE_FRAME_CENTERS = (100,)
+    DRAW_FRAME_CENTERS = (100, 230, 365, 485, 615, 750)
+    SHOOT_FRAME_CENTERS = (102, 245, 415, 575)
+    REST_FRAME_CENTERS = (100, 250, 402, 550, 697, 835)
+
     def __init__(self, x=ARCHER_X, y=ARCHER_Y):
         self.x = x
         self.y = y
         self.width = 24
         self.height = 60
         self.fire_duration = 0.22
+        self.draw_duration = 0.55
         self.fire_timer = 0.0
         self.draw_progress = 0.0
+        self.animation_time = 0.0
+        self.aiming = False
+        self.has_drawn_arrow = False
+        (
+            self.idle_frames,
+            self.draw_frames,
+            self.shoot_frames,
+            self.rest_frames,
+        ) = self._load_frames()
+
+    def _load_frames(self):
+        assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+        sheet = pygame.image.load(os.path.join(assets_dir, "arqueiro.png"))
+        frame_width, frame_height = self.FRAME_SIZE
+
+        def crop_frames(centers, top):
+            frames = []
+            for center_x in centers:
+                source_rect = pygame.Rect(
+                    center_x - frame_width // 2,
+                    top,
+                    frame_width,
+                    frame_height,
+                )
+                frame = pygame.Surface(self.FRAME_SIZE, pygame.SRCALPHA)
+                frame.blit(sheet, (0, 0), source_rect)
+                for frame_y in range(frame_height):
+                    for frame_x in range(frame_width):
+                        color = frame.get_at((frame_x, frame_y))
+                        if (
+                            color.r <= 12
+                            and color.g <= 18
+                            and color.b <= 36
+                            and color.b >= color.g + 4
+                        ):
+                            frame.set_at(
+                                (frame_x, frame_y),
+                                (color.r, color.g, color.b, 0),
+                            )
+                frames.append(frame)
+            return frames
+
+        return (
+            crop_frames(self.IDLE_FRAME_CENTERS, 71),
+            crop_frames(self.DRAW_FRAME_CENTERS, 288),
+            crop_frames(self.SHOOT_FRAME_CENTERS, 507),
+            crop_frames(self.REST_FRAME_CENTERS, 720),
+        )
 
     def fire(self):
         self.fire_timer = self.fire_duration
+        self.aiming = False
 
     def update(self, dt, aiming=False):
         self.fire_timer = max(0.0, self.fire_timer - dt)
-        target_progress = 1.0 if aiming else self.fire_timer / self.fire_duration
-        progress_step = min(1.0, dt * 12)
-        self.draw_progress += (target_progress - self.draw_progress) * progress_step
+        self.animation_time += dt
+        self.aiming = aiming
+        if aiming:
+            self.has_drawn_arrow = True
+            self.draw_progress = min(
+                1.0, self.draw_progress + dt / self.draw_duration
+            )
+        else:
+            self.draw_progress = max(
+                0.0, self.draw_progress - dt / self.fire_duration
+            )
 
     def draw(self, surface, aim_angle_deg=45):
-        head_center = (self.x, self.y - self.height - 15)
-        pygame.draw.circle(surface, (224, 168, 126), head_center, 14)
-        pygame.draw.circle(surface, COLOR_BLACK, head_center, 14, width=2)
+        if self.fire_timer > 0:
+            progress = 1 - self.fire_timer / self.fire_duration
+            frames = self.shoot_frames
+            frame_index = min(len(frames) - 1, int(progress * len(frames)))
+        elif self.aiming:
+            frames = self.draw_frames
+            frame_index = min(
+                len(frames) - 1,
+                int(self.draw_progress * len(frames)),
+            )
+        elif self.has_drawn_arrow:
+            frames = self.rest_frames
+            frame_index = int(self.animation_time * 8) % len(frames)
+        else:
+            frames = self.idle_frames
+            frame_index = int(self.animation_time * 8) % len(frames)
 
-        hair_points = [
-            (self.x - 14, self.y - self.height - 17),
-            (self.x - 9, self.y - self.height - 31),
-            (self.x + 7, self.y - self.height - 30),
-            (self.x + 15, self.y - self.height - 16),
-        ]
-        pygame.draw.polygon(surface, (75, 43, 34), hair_points)
-        pygame.draw.line(surface, (235, 198, 157),
-                         (self.x - 6, self.y - self.height - 15),
-                         (self.x - 2, self.y - self.height - 15), 2)
-
-        body_rect = pygame.Rect(self.x - self.width // 2, self.y - self.height, self.width, self.height)
-        pygame.draw.ellipse(surface, (24, 37, 47), (body_rect.left - 3, body_rect.bottom - 8, 30, 13))
-        pygame.draw.rect(surface, (39, 104, 128), body_rect, border_radius=6)
-        pygame.draw.polygon(surface, (53, 132, 145), [
-            (body_rect.left + 4, body_rect.top + 5),
-            (self.x, body_rect.top + 10),
-            (self.x - 2, body_rect.bottom - 7),
-            (body_rect.left + 4, body_rect.bottom - 5),
-        ])
-        pygame.draw.rect(surface, (28, 67, 84), body_rect, width=2, border_radius=6)
-        pygame.draw.line(surface, (185, 145, 83),
-                         (body_rect.left + 3, body_rect.top + 32),
-                         (body_rect.right - 3, body_rect.top + 32), 5)
-        pygame.draw.circle(surface, (239, 204, 129), (self.x, body_rect.top + 32), 4)
-        pygame.draw.line(surface, (76, 171, 172),
-                         (self.x - 2, body_rect.top + 8), (self.x - 2, body_rect.bottom - 8), 2)
-
-        pygame.draw.line(surface, (58, 42, 65),
-                         (self.x - 7, self.y - 3), (self.x - 14, self.y + 18), 7)
-        pygame.draw.line(surface, (58, 42, 65),
-                         (self.x + 7, self.y - 3), (self.x + 14, self.y + 18), 7)
-        pygame.draw.line(surface, (20, 20, 25),
-                         (self.x - 20, self.y + 18), (self.x - 8, self.y + 18), 5)
-        pygame.draw.line(surface, (20, 20, 25),
-                         (self.x + 8, self.y + 18), (self.x + 20, self.y + 18), 5)
-
-        self.draw_bow(surface, aim_angle_deg, draw_arms=True)
+        sprite = frames[frame_index]
+        visible_bounds = sprite.get_bounding_rect()
+        feet_y = self.y + GROUND_Y - ARCHER_Y
+        sprite_rect = sprite.get_rect()
+        sprite_rect.midbottom = (
+            round(self.x),
+            round(feet_y + sprite.get_height() - visible_bounds.bottom),
+        )
+        surface.blit(sprite, sprite_rect)
 
     def draw_bow(self, surface, aim_angle_deg=45, draw_arms=False):
         angle_rad = math.radians(aim_angle_deg)
@@ -143,7 +190,7 @@ class Archer:
             pygame.draw.circle(surface, (224, 168, 126), string_center, 4)
 
     def get_launch_point(self):
-        return self.x, self.y - self.height // 2
+        return self.x + 40, self.y - 38
 
     def get_bow_launch_point(self, aim_angle_deg=45):
         angle_rad = math.radians(aim_angle_deg)
@@ -162,10 +209,21 @@ class Archer:
 class Obstacle:
     """Bloco/parede vertical que a flecha precisa transpor."""
 
+    TERRAIN_SIDE_RECT = pygame.Rect(1008, 136, 50, 48)
+    TERRAIN_TOP_RECT = pygame.Rect(1008, 110, 50, 18)
+    terrain_side = None
+    terrain_top = None
+
     def __init__(self, x, y, width, height, angle=0):
         self.rect = pygame.Rect(x, y, width, height)
         self.angle = angle
         self.points = self._polygon_points()
+        self._textured_surface = None
+
+    @classmethod
+    def set_terrain_textures(cls, side, top):
+        cls.terrain_side = side
+        cls.terrain_top = top
 
     def _polygon_points(self, inset=0):
         center_x, center_y = self.rect.center
@@ -193,6 +251,44 @@ class Obstacle:
         self.points = self._polygon_points()
 
     def draw(self, surface):
+        if self.terrain_side is not None and self.terrain_top is not None:
+            if self._textured_surface is None:
+                self._textured_surface = pygame.Surface(
+                    self.rect.size, pygame.SRCALPHA
+                )
+                tile_size = (
+                    max(1, round(self.terrain_side.get_width() * 0.5)),
+                    max(1, round(self.terrain_side.get_height() * 0.5)),
+                )
+                side_tile = pygame.transform.scale(
+                    self.terrain_side, tile_size
+                )
+                top_tile = pygame.transform.scale(
+                    self.terrain_top,
+                    (
+                        max(1, round(self.terrain_top.get_width() * 0.5)),
+                        max(1, round(self.terrain_top.get_height() * 0.5)),
+                    ),
+                )
+                top_height = min(top_tile.get_height(), self.rect.height)
+                for tile_x in range(0, self.rect.width, top_tile.get_width()):
+                    self._textured_surface.blit(top_tile, (tile_x, 0))
+                for tile_y in range(top_height, self.rect.height, side_tile.get_height()):
+                    for tile_x in range(0, self.rect.width, side_tile.get_width()):
+                        self._textured_surface.blit(side_tile, (tile_x, tile_y))
+
+            if self.angle:
+                rotated_surface = pygame.transform.rotate(
+                    self._textured_surface, -self.angle
+                )
+                surface.blit(
+                    rotated_surface,
+                    rotated_surface.get_rect(center=self.rect.center),
+                )
+            else:
+                surface.blit(self._textured_surface, self.rect)
+            return
+
         if self.angle:
             pygame.draw.polygon(surface, COLOR_OBSTACLE, self.points)
             pygame.draw.polygon(surface, (151, 108, 76), self._polygon_points(3))

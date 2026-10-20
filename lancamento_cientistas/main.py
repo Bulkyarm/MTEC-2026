@@ -26,7 +26,7 @@ from settings import (
     ROUNDS_PER_PHASE, TOTAL_PHASES, PIXELS_PER_METER, GRAVITY,
     DEVELOPER_MODE_ENABLED,
 )
-from entities import Archer, Arrow
+from entities import Archer, Arrow, Obstacle
 from phase_2_assets import load_phase_2_assets
 from phase_3_assets import load_phase_3_assets
 from phase_4_assets import load_phase_4_assets
@@ -39,7 +39,7 @@ from ui import (
 )
 from game_state import GameState
 from data.scientists import PHASES, get_hint_for_round, get_calculation_hint
-from levels import FIXED_SCENARIOS, build_round
+from levels import FIXED_SCENARIOS, PHASE_INTROS, build_round
 
 PHASE_1_BUTTON_SIZE = (128, 48)
 PHASE_1_BUTTON_PRESS_DURATION = 0.12
@@ -83,6 +83,32 @@ class Game:
         self.font_npc = pygame.font.SysFont("arial", 26, bold=True)
 
         assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+        terrain_sheet = pygame.image.load(
+            os.path.join(assets_dir, "cenarioPadrao.png")
+        ).convert()
+        forest_rect = pygame.Rect(134, 61, 714, 428)
+        forest_scene = terrain_sheet.subsurface(forest_rect)
+        forest_scale = max(
+            SCREEN_WIDTH / forest_rect.width,
+            SCREEN_HEIGHT / forest_rect.height,
+        )
+        forest_size = (
+            round(forest_rect.width * forest_scale),
+            round(forest_rect.height * forest_scale),
+        )
+        scaled_forest = pygame.transform.scale(forest_scene, forest_size)
+        self.phase_background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.phase_background.blit(
+            scaled_forest,
+            scaled_forest.get_rect(
+                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+            ),
+        )
+        Obstacle.set_terrain_textures(
+            terrain_sheet.subsurface(Obstacle.TERRAIN_SIDE_RECT).copy(),
+            terrain_sheet.subsurface(Obstacle.TERRAIN_TOP_RECT).copy(),
+        )
+
         scientist_sprite = pygame.image.load(
             os.path.join(assets_dir, "phase_1_scientist.png")
         ).convert_alpha()
@@ -117,6 +143,10 @@ class Game:
         self.state = STATE_MENU
         self.game_state = GameState()
         self.game_state.reset()
+        self.phase_intro_shade = pygame.Surface(
+            (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA,
+        )
+        self.phase_intro_shade.fill((0, 0, 0, 170))
 
         self.archer = Archer()
         self.dialog = DialogBox(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -215,29 +245,31 @@ class Game:
     def _build_phase_intro_buttons(self):
         self.buttons = [
             Button(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 100, 180, 50,
-                   "Continuar", self.font_medium, self._start_round),
+                   "Comecar fase", self.font_medium, self._start_round),
         ]
 
     def _build_aiming_widgets(self):
+        control_center_y = SCREEN_HEIGHT - 39
         self.input_angle = InputBox(
-            300, SCREEN_HEIGHT - 90, 120, 40, label="Angulo (graus)",
+            300, control_center_y - 20, 120, 40, label="Angulo (graus)",
             initial_text="45", font=self.font_medium,
             min_value=MIN_ANGLE, max_value=MAX_ANGLE,
         )
         self.input_velocity = InputBox(
-            470, SCREEN_HEIGHT - 90, 120, 40, label="Velocidade inicial (m/s)",
+            470, control_center_y - 20, 120, 40, label="Velocidade inicial (m/s)",
             initial_text="20", font=self.font_medium,
             min_value=MIN_VELOCITY, max_value=MAX_VELOCITY,
         )
         self._refresh_aiming_buttons()
 
     def _refresh_aiming_buttons(self):
-        launch_btn = Button(650, SCREEN_HEIGHT - 92, 140, 46, "Lancar!",
+        button_y = SCREEN_HEIGHT - 39 - 23
+        launch_btn = Button(650, button_y, 140, 46, "Lancar!",
                             self.font_medium, self._on_launch_click)
         self.buttons = [launch_btn]
         if self.attempt_count >= 3:
             self.buttons.append(Button(
-                810, SCREEN_HEIGHT - 92, 170, 46, "Calculadora",
+                810, button_y, 170, 46, "Calculadora",
                 self.font_medium, self._open_calculator,
             ))
 
@@ -274,7 +306,8 @@ class Game:
         self.arrow = None
         self.result_pending = False
         self.calculator.close()
-        self._start_round()
+        self.state = STATE_PHASE_INTRO
+        self._build_phase_intro_buttons()
 
     def _on_quit_click(self):
         pygame.quit()
@@ -617,25 +650,13 @@ class Game:
             sprite = self.phase_6_assets.looking
         else:
             sprite = self.phase_6_assets.idle
-        y = scene["scientist_position"][1]
-        if stage == "sit":
-            progress = min(
-                1.0,
-                self.phase_6_animation_time / scene["sit_duration"],
-            )
-            y -= round(68 * progress)
-        elif stage in ("microscope", "transposon"):
-            y -= 68
-        self.screen.blit(
-            sprite,
-            (self.phase_6_scientist_x, y),
-        )
         if stage in ("microscope", "transposon"):
             foreground_x, foreground_y = scene["laboratory_position"]
             self.screen.blit(
                 self.phase_6_assets.laboratory_foreground,
                 (foreground_x, foreground_y + 84),
             )
+        self._blit_grounded(sprite, self.phase_6_scientist_x)
 
     def _draw_phase_7_scene(self):
         forest = (
@@ -816,7 +837,10 @@ class Game:
         self.screen.blit(cabinet, (810, 345))
 
     def _get_phase_5_gun_geometry(self, aim_angle):
-        scientist_x, scientist_y = FIXED_SCENARIOS[4]["scientist_position"]
+        scientist_x, _ = FIXED_SCENARIOS[4]["scientist_position"]
+        scientist_y = (
+            GROUND_Y - self.phase_5_assets.idle.get_bounding_rect().bottom
+        )
         hand = pygame.Vector2(scientist_x + 43, scientist_y + 65)
         direction = pygame.Vector2(
             math.cos(math.radians(aim_angle)),
@@ -833,7 +857,7 @@ class Game:
             if self.phase_5_animation_stage == "complete"
             else self.phase_5_assets.idle
         )
-        self.screen.blit(sprite, scene["scientist_position"])
+        self._blit_grounded(sprite, scene["scientist_position"][0])
 
         hand, muzzle, perpendicular = self._get_phase_5_gun_geometry(aim_angle)
         direction = (muzzle - hand).normalize()
@@ -951,89 +975,35 @@ class Game:
                              special_flags=pygame.BLEND_RGBA_ADD)
         if self.phase_4_animation_stage in ("machine_run", "talk"):
             self._draw_phase_4_gears()
-        elif self.phase_4_animation_stage == "talk":
-            self.screen.blit(
-                self.phase_4_assets.talking,
-                (self.phase_4_scientist_x - 8, scene["scientist_position"][1]),
-            )
-        else:
-            self.screen.blit(
-                self.phase_4_assets.idle,
-                (self.phase_4_scientist_x, scene["scientist_position"][1]),
-            )
 
         if self.phase_4_animation_stage == "princess_fall":
+            sprite = self.phase_4_assets.idle
             progress = min(
                 1.0,
                 self.phase_4_animation_time
                 / scene["princess_fall_duration"],
             )
-            feet_y = round(-90 + (scene["princess_landing_y"] + 90) * progress)
-            self._draw_phase_4_princess(scene["princess_x"], feet_y)
+            feet_y = round(
+                -sprite.get_height()
+                + (scene["princess_landing_y"] + sprite.get_height()) * progress
+            )
         elif self.phase_4_princess_landed:
-            self._draw_phase_4_princess(
-                scene["princess_x"], scene["princess_landing_y"]
+            sprite = (
+                self.phase_4_assets.talking
+                if self.phase_4_animation_stage == "talk"
+                else self.phase_4_assets.idle
             )
+            feet_y = scene["princess_landing_y"]
+        else:
+            return
 
-    def _draw_phase_4_princess(self, center_x, feet_y):
-        umbrella_y = feet_y - 108
-        canopy = [
-            (center_x - 31, umbrella_y + 14),
-            (center_x - 27, umbrella_y + 3),
-            (center_x - 17, umbrella_y - 5),
-            (center_x, umbrella_y - 9),
-            (center_x + 17, umbrella_y - 5),
-            (center_x + 27, umbrella_y + 3),
-            (center_x + 31, umbrella_y + 14),
-        ]
-        pygame.draw.polygon(self.screen, (182, 73, 139), canopy)
-        pygame.draw.lines(self.screen, (246, 193, 222), False, canopy, 2)
-        for x_offset in (-20, 0, 20):
-            pygame.draw.line(
-                self.screen, (238, 178, 210),
-                (center_x, umbrella_y - 8), (center_x + x_offset, umbrella_y + 14), 1,
-            )
-        pygame.draw.line(
-            self.screen, (118, 82, 55),
-            (center_x, umbrella_y + 12), (center_x, umbrella_y + 38), 3,
+        bounds = sprite.get_bounding_rect()
+        sprite_rect = sprite.get_rect()
+        sprite_rect.midbottom = (
+            scene["princess_x"],
+            feet_y + sprite.get_height() - bounds.bottom,
         )
-        pygame.draw.arc(
-            self.screen, (118, 82, 55),
-            (center_x - 5, umbrella_y + 32, 10, 10),
-            0, 3.14, 2,
-        )
-
-        head_y = feet_y - 70
-        pygame.draw.circle(self.screen, (247, 190, 150), (center_x, head_y), 11)
-        pygame.draw.circle(self.screen, (100, 53, 43), (center_x, head_y - 5), 11, 3)
-        pygame.draw.polygon(
-            self.screen, (248, 209, 78),
-            [(center_x - 8, head_y - 9), (center_x - 5, head_y - 18),
-             (center_x, head_y - 11), (center_x + 5, head_y - 19),
-             (center_x + 9, head_y - 8)],
-        )
-        pygame.draw.polygon(
-            self.screen, (226, 104, 151),
-            [(center_x - 11, head_y + 12), (center_x + 11, head_y + 12),
-             (center_x + 17, feet_y - 8), (center_x, feet_y - 2),
-             (center_x - 17, feet_y - 8)],
-        )
-        pygame.draw.line(
-            self.screen, (247, 190, 150),
-            (center_x - 9, head_y + 21), (center_x - 19, head_y + 11), 4,
-        )
-        pygame.draw.line(
-            self.screen, (247, 190, 150),
-            (center_x + 9, head_y + 21), (center_x + 19, head_y + 11), 4,
-        )
-        pygame.draw.line(
-            self.screen, (246, 218, 142),
-            (center_x - 7, feet_y - 7), (center_x - 9, feet_y), 4,
-        )
-        pygame.draw.line(
-            self.screen, (246, 218, 142),
-            (center_x + 7, feet_y - 7), (center_x + 9, feet_y), 4,
-        )
+        self.screen.blit(sprite, sprite_rect)
 
     def _draw_phase_4_gears(self):
         scene = FIXED_SCENARIOS[3]
@@ -1244,7 +1214,6 @@ class Game:
                 )
 
     def _draw_phase_2_scientist(self, aim_angle):
-        scene = FIXED_SCENARIOS[1]
         sprite = self.phase_2_assets.idle
         if self.phase_2_animation_stage == "walk":
             frame_index = int(
@@ -1253,8 +1222,9 @@ class Game:
             ) % len(self.phase_2_assets.walk)
             sprite = self.phase_2_assets.walk[frame_index]
         self.screen.blit(
-            sprite,
-            (self.phase_2_scientist_x, scene["scientist_position"][1]),
+            sprite, self._grounded_character_position(
+                sprite, self.phase_2_scientist_x,
+            ),
         )
         if (
             self.phase_2_animation_stage is None
@@ -1275,7 +1245,8 @@ class Game:
             wall = self.obstacles[1]
             wall.set_y(
                 self.phase_3_wall_start_y
-                + (GROUND_Y - 30 - self.phase_3_wall_start_y) * progress
+                + (GROUND_Y + wall.rect.height - self.phase_3_wall_start_y)
+                * progress
             )
             if progress == 1.0:
                 self.phase_3_animation_stage = "walk"
@@ -1356,15 +1327,29 @@ class Game:
             ) % len(self.phase_3_assets.walk)
             sprite = self.phase_3_assets.walk[frame_index]
         self.screen.blit(
-            sprite,
-            (self.phase_3_scientist_x, scene["scientist_position"][1]),
+            sprite, self._grounded_character_position(
+                sprite, self.phase_3_scientist_x,
+            ),
         )
 
     # ------------------------------------------------------------ #
     # Desenho
     # ------------------------------------------------------------ #
 
+    def _grounded_character_position(self, sprite, x):
+        return round(x), GROUND_Y - sprite.get_bounding_rect().bottom
+
+    def _blit_grounded(self, sprite, x):
+        self.screen.blit(sprite, self._grounded_character_position(sprite, x))
+
     def _draw_background(self):
+        if (
+            self.state in (STATE_PHASE_INTRO, STATE_AIMING, STATE_LAUNCHED)
+            and self.game_state.phase_index < 6
+        ):
+            self.screen.blit(self.phase_background, (0, 0))
+            return
+
         self.screen.fill(COLOR_BG)
         pygame.draw.rect(self.screen, COLOR_GROUND, (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y))
 
@@ -1382,50 +1367,58 @@ class Game:
 
     def _draw_phase_intro(self):
         self._draw_background()
-        phase = self.game_state.current_phase()
-        self._draw_text_center(f"Fase {self.game_state.phase_index + 1} de {TOTAL_PHASES}",
-                                self.font_medium, COLOR_GRAY, 200)
-        if self.game_state.phase_index == 0:
-            intro_title = "Ajude Marie Curie a ligar a maquina de raio-X!"
-            instruction = "Lance a flecha no botao para ligar a maquina."
-        elif self.game_state.phase_index == 1:
-            intro_title = "Ajude Emmy Noether a escrever sua formula!"
-            instruction = "Acerte o alvo para derrubar o giz e registrar o teorema."
-        elif self.game_state.phase_index == 2:
-            intro_title = "Ajude Rosalind Franklin a revelar a Foto 51!"
-            instruction = "Acerte o botao para baixar a barra e liberar a camera."
-        elif self.game_state.phase_index == 3:
-            intro_title = "Ajude Ada Lovelace a ligar a Máquina Analítica!"
-            instruction = "Acerte a bolha para trazer a princesa e acender o carvão."
-        elif self.game_state.phase_index == 4:
-            intro_title = "Ajude Lise Meitner a explicar a fissão nuclear!"
-            instruction = (
-                "Use a arminha para lançar um nêutron e atingir o átomo "
-                "antes da barreira."
-            )
-        elif self.game_state.phase_index == 5:
-            intro_title = "Ajude Barbara McClintock a estudar os genes saltadores!"
-            instruction = (
-                "Acerte o alvo para baixar a barra e liberar o caminho "
-                "até o microscópio."
-            )
-        elif self.game_state.phase_index == 6:
-            intro_title = "Ajude Jane Goodall a observar os chimpanzés!"
-            instruction = (
-                "Ajuste o lançamento da teia para alcançar o chimpanzé "
-                "na copa da árvore."
-            )
-        else:
-            intro_title = phase["area"]
-            instruction = "Acerte as bolhas com o nome das cientistas dessa area!"
-        title_font = (
-            self.font_medium
-            if self.game_state.phase_index in (0, 1, 2, 3, 4, 5, 6)
-            else self.font_title
+        self.screen.blit(self.phase_intro_shade, (0, 0))
+
+        intro = PHASE_INTROS[self.game_state.phase_index]
+        panel = pygame.Rect(90, 105, SCREEN_WIDTH - 180, 365)
+        pygame.draw.rect(
+            self.screen, (25, 30, 48), panel, border_radius=16,
         )
-        self._draw_text_center(intro_title, title_font, COLOR_ACCENT, 260)
-        self._draw_text_center(instruction,
-                                self.font_small, COLOR_WHITE, 320)
+        pygame.draw.rect(
+            self.screen, COLOR_ACCENT, panel, width=3, border_radius=16,
+        )
+
+        phase_title = self.font_small.render(
+            f"FASE {self.game_state.phase_index + 1} DE {TOTAL_PHASES}",
+            True, COLOR_GRAY,
+        )
+        self.screen.blit(
+            phase_title,
+            phase_title.get_rect(center=(panel.centerx, panel.y + 32)),
+        )
+        title = self.font_title.render(intro["scientist"], True, COLOR_ACCENT)
+        self.screen.blit(title, title.get_rect(center=(panel.centerx, panel.y + 78)))
+
+        text_x = panel.x + 34
+        text_width = panel.width - 68
+        section_y = panel.y + 126
+        for heading, message in (
+            ("Quem foi?", intro["fact"]),
+            ("Sua missao", intro["objective"]),
+        ):
+            heading_surface = self.font_medium.render(
+                heading, True, COLOR_WHITE,
+            )
+            self.screen.blit(heading_surface, (text_x, section_y))
+            section_y += 34
+
+            lines = []
+            current_line = ""
+            for word in message.split():
+                candidate = f"{current_line} {word}".strip()
+                if self.font_small.size(candidate)[0] <= text_width:
+                    current_line = candidate
+                else:
+                    lines.append(current_line)
+                    current_line = word
+            if current_line:
+                lines.append(current_line)
+            for line in lines:
+                line_surface = self.font_small.render(line, True, COLOR_WHITE)
+                self.screen.blit(line_surface, (text_x, section_y))
+                section_y += 24
+            section_y += 18
+
         self.restart_button.draw(self.screen)
         for button in self.buttons:
             button.draw(self.screen)
@@ -1460,7 +1453,9 @@ class Game:
                 scientist_sprite = self.phase_1_walk_sprites[frame_index]
             self.screen.blit(
                 scientist_sprite,
-                (self.phase_1_scientist_x, phase_1_scene["scientist_position"][1]),
+                self._grounded_character_position(
+                    scientist_sprite, self.phase_1_scientist_x,
+                ),
             )
         elif self.game_state.phase_index == 1:
             self._draw_phase_2_scene()
@@ -1500,7 +1495,7 @@ class Game:
             self._draw_phase_5_target()
         elif self.game_state.phase_index == 6:
             self._draw_phase_7_target()
-        else:
+        elif self.game_state.phase_index not in (1, 5) or not self.target.hit:
             self.target.draw(self.screen, self.font_target)
 
         gravity_text = f"g = {GRAVITY:.1f} m/s^2"

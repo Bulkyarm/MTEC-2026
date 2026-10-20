@@ -5,6 +5,7 @@ mais altos/numerosos) e um pouco também dentro da fase (alvo mais longe).
 """
 
 from entities import Obstacle, Target
+from settings import GROUND_Y
 
 
 # Posicao do chimpanze desenhado no cenario da fase 7.
@@ -12,6 +13,73 @@ PHASE_7_TARGET_X = 860
 PHASE_7_TARGET_Y = 132
 # Multiplicador da gravidade: 1.0 e o padrao; maior cai mais rapido, menor mais devagar.
 PHASE_7_TARGET_FALL_SPEED_MULTIPLIER = 1.0
+
+PHASE_INTROS = [
+    {
+        "scientist": "Marie Curie",
+        "fact": (
+            "Foi pioneira no estudo da radioatividade e descobriu os elementos "
+            "polônio e rádio. Foi a primeira pessoa a receber dois Prêmios Nobel "
+            "em áreas científicas diferentes."
+        ),
+        "objective": "Acerte o botão para ligar a máquina de raio-X.",
+    },
+    {
+        "scientist": "Emmy Noether",
+        "fact": (
+            "Matemática que revolucionou a álgebra. Seu teorema relaciona as "
+            "simetrias da natureza às leis de conservação da física, como a "
+            "conservação da energia."
+        ),
+        "objective": "Acerte o alvo para derrubar o giz e registrar o teorema.",
+    },
+    {
+        "scientist": "Rosalind Franklin",
+        "fact": (
+            "Suas imagens de difração de raios X, incluindo a Foto 51, revelaram "
+            "pistas fundamentais sobre a estrutura em dupla hélice do DNA."
+        ),
+        "objective": "Acerte o botão para baixar a barra e liberar a câmera.",
+    },
+    {
+        "scientist": "Ada Lovelace",
+        "fact": (
+            "Escreveu o que é considerado o primeiro algoritmo destinado a ser "
+            "executado por uma máquina e é reconhecida como pioneira da programação."
+        ),
+        "objective": (
+            "Acerte a bolha para trazer a princesa e acender o carvão da "
+            "Máquina Analítica."
+        ),
+    },
+    {
+        "scientist": "Lise Meitner",
+        "fact": (
+            "Ajudou a explicar teoricamente a fissão nuclear e a energia liberada "
+            "nesse processo, contribuição essencial para a física nuclear."
+        ),
+        "objective": "Lance um nêutron por cima da barreira e acerte o átomo.",
+    },
+    {
+        "scientist": "Barbara McClintock",
+        "fact": (
+            "Descobriu os transposons, segmentos de DNA capazes de mudar de "
+            "posição no genoma, também conhecidos como genes saltadores."
+        ),
+        "objective": (
+            "Acerte o alvo para baixar a barra e liberar o caminho até o "
+            "microscópio."
+        ),
+    },
+    {
+        "scientist": "Jane Goodall",
+        "fact": (
+            "Estudou chimpanzés selvagens por décadas e mostrou que eles fabricam "
+            "e usam ferramentas, transformando o conhecimento sobre esses animais."
+        ),
+        "objective": "Ajuste o lançamento da teia para alcançar o chimpanzé.",
+    },
+]
 
 # Cada item representa uma fase. Para criar mais cenarios, adicione outro
 # dicionario com obstaculos e alvo seguindo este mesmo formato.
@@ -27,27 +95,30 @@ FIXED_SCENARIOS = [
         "scientist_position": (700, 408),
         "scientist_machine_position": (785, 408),
         "machine_position": (835, 309),
-        "target": (670, 400),
+        "target": (620, 500),
     },
     # Fase 2: barra horizontal bloqueia o caminho ate o alvo.
     {
         "obstacles": [(100, 235, 500, 30)],
-        "target": (900, 430),
+        "target": (700, 430),
         "scientist_position": (30, 382),
-        "scientist_end_x": 720,
-        "blackboard_position": (790, 115),
+        "scientist_end_x": 500,
+        "blackboard_position": (790, 395),
         "chalk_position": (350, 211),
     },
-    # Fase 3: Rosalind fica entre as barras; a maior desce ao acertar o botao.
+    # Fase 3: duas barras sobre o chao, alvo ao lado da barra alta e camera suspensa.
     {
         "obstacles": [
-            (250, 315, 28, 205),
-            (675, 205, 30, 315),
+            (240, 390, 32, 130),
+            (470, 220, 32, 300),
+            # Ajuste manual: (x, y, largura, altura) da barra sobre o botao.
+            (600, 300, 100, 16),
         ],
-        "target": (510, 438),
+        "target": (680, GROUND_Y - 36),
         "scientist_position": (420, 370),
         "scientist_end_x": 770,
-        "camera_position": (805, 347),
+        # A camera mede 150 px de altura; mantenha a base alinhada ao chao.
+        "camera_position": (850, GROUND_Y - 150),
         "button_size": (72, 72),
         "button_press_duration": 0.25,
         "bar_fall_duration": 0.8,
@@ -56,14 +127,18 @@ FIXED_SCENARIOS = [
     },
     # Fase 4: Ada aciona a bolha para trazer a princesa e alimentar a maquina.
     {
-        "obstacles": [],
+        "obstacles": [  (240, 220, 32, 300),
+                      (470, 390, 32, 130),
+                      
+                   
+        ],
         "target": (450, 448),
         "scientist_position": (355, 380),
         "scientist_machine_x": 785,
         "machine_position": (830, 315),
         "furnace_position": (618, 342),
         "princess_x": 585,
-        "princess_landing_y": 510,
+        "princess_landing_y": GROUND_Y,
         "princess_fall_duration": 1.6,
         "fire_duration": 0.7,
         "machine_duration": 2.0,
@@ -85,7 +160,7 @@ FIXED_SCENARIOS = [
             (500, 440, 32, 80),  # parede menor mais adiante
             (100, 270, 650, 24),  # teto horizontal sobre as duas paredes
         ],
-        "target": (675, 370),  # alvo para liberar Barbara e a passagem
+        "target": (600, 500),  # alvo para liberar Barbara e a passagem
         "scientist_position": (345, 394),
         "scientist_end_x": 722,
         "laboratory_position": (704, 322),

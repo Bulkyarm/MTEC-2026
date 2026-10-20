@@ -1,6 +1,17 @@
 {
-  "phase_index": 0,
+  "phase_index": 4,
   "round_index": 0,
-  "score": 0,
-  "unlocked": []
+  "score": 20,
+  "unlocked": [
+    {
+      "phase": "Matemática e Computação",
+      "name": "Ada Lovelace",
+      "fact": "Escreveu o que é considerado o primeiro algoritmo destinado a ser processado por uma máquina, sendo reconhecida como pioneira da programação."
+    },
+    {
+      "phase": "Astronomia",
+      "name": "Caroline Herschel",
+      "fact": "Descobriu diversos cometas e foi a primeira mulher a receber um salário como cientista, no Reino Unido."
+    }
+  ]
 }
