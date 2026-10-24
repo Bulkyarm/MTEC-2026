@@ -13,7 +13,6 @@ class Phase3Assets(NamedTuple):
     walk: list[pygame.Surface]
     portrait: pygame.Surface
     camera: pygame.Surface
-    button: pygame.Surface
     diffraction_photo: pygame.Surface
 
 
@@ -59,10 +58,6 @@ def load_phase_3_assets(assets_dir):
         camera=pygame.transform.smoothscale(
             _extract_sprite(sheet, pygame.Rect(796, 116, 250, 292)),
             (142, 150),
-        ),
-        button=pygame.transform.smoothscale(
-            _extract_sprite(sheet, pygame.Rect(830, 580, 190, 195)),
-            (72, 72),
         ),
         diffraction_photo=pygame.transform.smoothscale(
             sheet.subsurface(pygame.Rect(1148, 520, 316, 316)),

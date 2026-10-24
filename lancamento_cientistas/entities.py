@@ -19,11 +19,11 @@ from physics import Projectile
 class Archer:
     """Representa o atirador, fixo do lado esquerdo da tela."""
 
-    FRAME_SIZE = (130, 130)
+    FRAME_SIZE = (130, 170)
     IDLE_FRAME_CENTERS = (100,)
     DRAW_FRAME_CENTERS = (100, 230, 365, 485, 615, 750)
     SHOOT_FRAME_CENTERS = (102, 245, 415, 575)
-    REST_FRAME_CENTERS = (100, 250, 402, 550, 697, 835)
+    REST_FRAME_CENTERS = (100,)
 
     def __init__(self, x=ARCHER_X, y=ARCHER_Y):
         self.x = x

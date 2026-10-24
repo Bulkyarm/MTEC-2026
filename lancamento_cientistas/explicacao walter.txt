@@ -1,10 +1,16 @@
-# As fases já foram editadas e estão conforme a ultima decisão, agora só resta a contextualização das fases.
+Fase 1:
+Adicionar textura do arqueiro, Terminar a estetica do botão-alvo e no pop-up adicionar um pop-up com um raio-x.
 
-#Estamos trabalhando nisso agora.
+Fase 2: pop-up antes de jogar a fase´(Ajude a Emmy…..), caixa de giz, caixa de giz deve estar quase caindo da barra horizontal(lado direito em cima da barra), barra horizontal deve diminuir para a caixa cair, quadro no nivel do chão, arco deve corresponder a animação com a a cientista etc…, alvo deve ser algo mais bonito, animação da cientista pegando o giz.
 
-#esse é o atual estado do jogo.
+Fase 3: Trocar o botão de lado com a cientista, animação da cientista ligando a maquina de raio-x.
 
+Fase 4: animação da cientista caindo do ar, a cientista não deve começar na fase(ela so chega quando o alvo é acertado, retirada da maquina a vapor, pop-up de um calculo matematico para mostrar que a maquina realmente funciona.
 
-#A fase 1 já está quase pronta, só faltam as dimensoes, ajustes finos etc....
+Fase 5: Retirar a bancada, animação de fissão nuclear, animação da arma na mão de Lise, textura da arma na mão de Lise.
 
-Fase 7 o alvo cai.
+Fase 6: Melhorar a textura do alvo, abaixar o alvo para o nivel da “terra”, animação da cientista subindo na cadeira.
+
+Fase 7: Retirar a “mira” do chimpanzé, calculadora especial para a fase 7 pois, é diferente das outras fases, animação da cientista com a arma, se possivel melhorar mais a teia que prende o chimpanzé.
+
+Para grande maioria das fases: os inputs e os botoes lançar e calculadora não devem atrapalhar a jogabilidade, todas as fases precisam de um cenario, o arqueiro precisa de um sprite para melhorar sua textura, toda fase antes de começar deve ter um pop-up contextualizando o que cada cientista fez e o que ele deve fazer em cada fase, cada fase deve ter um alvo contextualizado de acordo com a sua cientista escolhida.

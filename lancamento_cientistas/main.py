@@ -38,10 +38,12 @@ from ui import (
     ConfirmationDialog,
 )
 from game_state import GameState
+from game_audio import GameAudio
 from data.scientists import PHASES, get_hint_for_round, get_calculation_hint
 from levels import FIXED_SCENARIOS, PHASE_INTROS, build_round
 
-PHASE_1_BUTTON_SIZE = (128, 48)
+PHASE_1_BUTTON_RADIUS = 18
+PHASE_3_BUTTON_RADIUS = 20
 PHASE_1_BUTTON_PRESS_DURATION = 0.12
 PHASE_1_BUTTON_RETURN_DURATION = 0.12
 PHASE_1_BUTTON_ANIMATION_DURATION = 0.42
@@ -49,8 +51,11 @@ PHASE_1_WALK_DURATION = 1.2
 PHASE_1_WALK_FRAME_RATE = 10
 PHASE_2_CHALK_FALL_DURATION = 0.65
 PHASE_2_WALK_DURATION = 1.8
+PHASE_2_PICKUP_DURATION = 0.55
 PHASE_2_WRITE_DURATION = 1.8
 PHASE_2_WALK_FRAME_RATE = 8
+PHASE_2_SHOOT_DURATION = 0.22
+PHASE_2_BOW_LAUNCH_ANCHOR = (0.80, 0.43)
 PHASE_2_FORMULA = "Q = Σ pᵢ δqᵢ"
 PHASE_3_WALK_FRAME_RATE = 8
 PHASE_5_IMPACT_DURATION = 0.35
@@ -59,19 +64,57 @@ PHASE_5_ENERGY_DURATION = 1.2
 PHASE_6_WALK_FRAME_RATE = 8
 PHASE_7_WEB_ATTACH_DURATION = 0.65
 PHASE_7_BRANCH_ANCHOR = (836, 156)
+OPENING_STORY_PARTS = (
+    "Olá! Eu sou Alex. Gosto de aventuras, enigmas e desafios que parecem "
+    "impossíveis, principalmente quando tenho meu arco e minhas flechas por "
+    "perto. Mas a missão que recebi hoje é diferente de qualquer outra.",
+    "Minha professora de História, Helena, está preparando uma aula sobre "
+    "mulheres que transformaram a ciência. Ela quer mostrar como as ideias "
+    "dessas cientistas ajudaram a mudar a maneira como entendemos o mundo.",
+    "Para me ajudar, Helena me mostrou um caderno cheio de anotações, desenhos "
+    "e pistas. Ele não guarda descobertas perdidas: reúne perguntas e desafios "
+    "inspirados no trabalho de grandes cientistas. Cada página apresenta uma "
+    "cientista e uma ideia importante que precisamos conhecer.",
+    "Só que há um problema: para avançar pelas páginas, é preciso superar os "
+    "desafios que protegem cada pista. Alguns alvos parecem distantes, outros "
+    "estão em lugares difíceis de alcançar. Um lançamento mal calculado pode "
+    "nos obrigar a tentar de novo!",
+    "A primeira pista nos leva até Marie Curie, uma cientista que dedicou a "
+    "vida a investigar fenômenos invisíveis. Seus estudos sobre a "
+    "radioatividade abriram caminhos importantes para a ciência e ajudaram "
+    "outras pessoas a explorar os mistérios da matéria.",
+    "Depois, nossa jornada seguirá por outras histórias extraordinárias: "
+    "ideias matemáticas que revelam relações profundas na natureza, imagens "
+    "que ajudaram a investigar o DNA e invenções que anteciparam "
+    "possibilidades da computação.",
+    "Cada desafio vai exigir atenção e raciocínio. Observe a distância, "
+    "escolha o ângulo e calcule a força do lançamento. A trajetória da flecha "
+    "depende das suas decisões — e cada alvo acertado nos aproxima de uma "
+    "nova pista para a aula da professora Helena.",
+    "Nossa missão é percorrer todas as páginas, conhecer as cientistas e "
+    "descobrir por que suas contribuições são tão importantes. Quando "
+    "terminarmos, Helena terá uma aula cheia de histórias, perguntas e "
+    "descobertas para compartilhar. Preparado, explorador? A primeira pista "
+    "está esperando!",
+)
+OPENING_STORY_PART_DURATION = 12.0
+OPENING_STORY_TYPING_SPEED = 30
 # ---------------------------------------------------------------- #
 # Estados possíveis do jogo (máquina de estados simples)
 STATE_MENU = "menu"
+STATE_OPENING_STORY = "opening_story"
 STATE_PHASE_INTRO = "phase_intro"
 STATE_AIMING = "aiming"
 STATE_LAUNCHED = "launched"
 STATE_DEV_MODE = "developer_mode"
+STATE_PHASE_COMPLETE = "phase_complete"
 STATE_GAME_OVER = "game_over"
 
 
 class Game:
     def __init__(self):
         pygame.init()
+        self.audio = GameAudio()
         pygame.display.set_caption(TITLE)
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
@@ -115,7 +158,15 @@ class Game:
         machine_sprite = pygame.image.load(
             os.path.join(assets_dir, "phase_1_xray_machine.png")
         ).convert_alpha()
-        self.phase_1_scientist_sprite = pygame.transform.smoothscale(scientist_sprite, (52, 112))
+        scientist_height = 170
+        scientist_size = (
+            round(scientist_sprite.get_width() * scientist_height
+                  / scientist_sprite.get_height()),
+            scientist_height,
+        )
+        self.phase_1_scientist_sprite = pygame.transform.smoothscale(
+            scientist_sprite, scientist_size
+        )
         self.phase_1_machine_sprite = pygame.transform.smoothscale(machine_sprite, (118, 211))
         self.phase_1_walk_sprites = []
         for frame_index in range(5):
@@ -124,8 +175,13 @@ class Game:
                     assets_dir, f"phase_1_scientist_walk_{frame_index}.png"
                 )
             ).convert_alpha()
+            walk_size = (
+                round(walk_sprite.get_width() * scientist_height
+                      / walk_sprite.get_height()),
+                scientist_height,
+            )
             self.phase_1_walk_sprites.append(
-                pygame.transform.smoothscale(walk_sprite, (52, 112))
+                pygame.transform.smoothscale(walk_sprite, walk_size)
             )
         portrait_sprite = pygame.image.load(
             os.path.join(assets_dir, "phase_1_scientist_portrait.png")
@@ -150,14 +206,33 @@ class Game:
 
         self.archer = Archer()
         self.dialog = DialogBox(SCREEN_WIDTH, SCREEN_HEIGHT)
+        control_x = SCREEN_WIDTH - 180
         self.restart_button = Button(
-            SCREEN_WIDTH - 180, 16, 160, 38, "Reiniciar jogo",
+            control_x, 12, 160, 34, "Reiniciar jogo",
             self.font_small, self._request_restart,
         )
+        self.back_to_menu_button = Button(
+            control_x, 52, 160, 34, "Voltar ao menu",
+            self.font_small, self._on_back_to_menu,
+        )
         self.quit_button = Button(
-            SCREEN_WIDTH - 135, 60, 115, 34, "Fechar jogo",
+            control_x, 92, 160, 34, "Fechar jogo",
             self.font_small, self._on_quit_click,
         )
+        audio_control_x = SCREEN_WIDTH - 430
+        self.audio_volume_down_button = Button(
+            audio_control_x + 42, 12, 38, 34, "-",
+            self.font_small, lambda: self.audio.change_volume(-0.1),
+        )
+        self.audio_volume_up_button = Button(
+            audio_control_x + 84, 12, 38, 34, "+",
+            self.font_small, lambda: self.audio.change_volume(0.1),
+        )
+        self.audio_mute_button = Button(
+            audio_control_x + 126, 12, 92, 34, "Mudo",
+            self.font_small, self.audio.toggle_mute,
+        )
+        self.audio_label_position = (audio_control_x, 20)
         self.restart_confirmation = ConfirmationDialog(
             SCREEN_WIDTH, SCREEN_HEIGHT, self.font_small,
             self._on_restart_click, self._cancel_restart,
@@ -174,6 +249,7 @@ class Game:
         self.target = None
         self.arrow = None
         self.attempt_count = 0
+        self.completed_phase_index = None
         self.result_message = None
         self.last_result_success = False
         self.result_pending = False
@@ -182,10 +258,13 @@ class Game:
         self.phase_1_animation_stage = None
         self.phase_1_walk_time = 0.0
         self.phase_1_scientist_x = 0
+        self.opening_story_index = 0
+        self.opening_story_elapsed = 0.0
         self.phase_2_animation_stage = None
         self.phase_2_animation_time = 0.0
         self.phase_2_scientist_x = 0
         self.phase_2_formula_progress = 0.0
+        self.phase_2_shoot_time = 0.0
         self.phase_3_animation_stage = None
         self.phase_3_animation_time = 0.0
         self.phase_3_scientist_x = 0
@@ -281,6 +360,21 @@ class Game:
                    "Voltar ao Menu", self.font_medium, self._on_back_to_menu),
         ]
 
+    def _build_phase_complete_buttons(self, has_next_phase):
+        button_x = SCREEN_WIDTH // 2 - 150
+        self.buttons = [
+            Button(
+                button_x, 360, 300, 48,
+                "Proxima fase" if has_next_phase else "Voltar ao Menu",
+                self.font_medium,
+                self._on_next_phase if has_next_phase else self._on_back_to_menu,
+            ),
+            Button(
+                button_x, 420, 300, 48, "Refazer fase",
+                self.font_medium, self._on_replay_phase,
+            ),
+        ]
+
     # ------------------------------------------------------------ #
     # Callbacks de botões
     # ------------------------------------------------------------ #
@@ -289,8 +383,109 @@ class Game:
         if self.game_state.is_game_complete():
             self.game_state.reset()
             self.layout_index = 0
+        self.opening_story_index = 0
+        self.opening_story_elapsed = 0.0
+        self.state = STATE_OPENING_STORY
+        self.opening_story_skip_button = Button(
+            SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 100, 180, 50,
+            "Ignorar", self.font_medium, self._skip_opening_story,
+        )
+        self._build_phase_intro_buttons()
+
+    def _opening_story_duration(self):
+        return OPENING_STORY_PART_DURATION
+
+    def _advance_opening_story(self):
+        self.opening_story_index += 1
+        self.opening_story_elapsed = 0.0
+        if self.opening_story_index == len(OPENING_STORY_PARTS):
+            self._finish_opening_story()
+
+    def _skip_opening_story(self):
+        self._finish_opening_story()
+
+    def _finish_opening_story(self):
+        self.audio.play("phase")
         self.state = STATE_PHASE_INTRO
         self._build_phase_intro_buttons()
+
+    def _update_opening_story(self, dt):
+        if self.state != STATE_OPENING_STORY:
+            return
+        self.opening_story_elapsed += dt
+        if self.opening_story_elapsed >= self._opening_story_duration():
+            self._advance_opening_story()
+
+    def _draw_opening_story(self):
+        self._draw_background()
+        self.screen.blit(self.phase_intro_shade, (0, 0))
+
+        panel = pygame.Rect(90, 105, SCREEN_WIDTH - 180, 365)
+        pygame.draw.rect(
+            self.screen, (25, 30, 48), panel, border_radius=16,
+        )
+        pygame.draw.rect(
+            self.screen, COLOR_ACCENT, panel, width=3, border_radius=16,
+        )
+
+        title = self.dialog.title_font.render(
+            "Uma missão especial", True, COLOR_ACCENT,
+        )
+        self.screen.blit(
+            title, title.get_rect(center=(panel.centerx, panel.y + 52)),
+        )
+
+        text_font_size = 18
+        text_font = pygame.font.SysFont("arial", text_font_size, bold=True)
+        story = OPENING_STORY_PARTS[self.opening_story_index]
+        visible_characters = min(
+            len(story),
+            int(self.opening_story_elapsed * OPENING_STORY_TYPING_SPEED),
+        )
+
+        text_x = panel.x + 34
+        text_width = panel.width - 68
+        text_area = pygame.Rect(text_x, panel.y + 100, text_width, 235)
+
+        def wrap_story(text, font):
+            lines = []
+            current_line = ""
+            for word in text.split():
+                candidate = f"{current_line} {word}".strip()
+                if font.size(candidate)[0] <= text_width or not current_line:
+                    current_line = candidate
+                else:
+                    lines.append(current_line)
+                    current_line = word
+            if current_line:
+                lines.append(current_line)
+            return lines
+
+        line_height = text_font.get_linesize() + 3
+        while (
+            len(wrap_story(story, text_font)) * line_height > text_area.height
+            and text_font_size > 14
+        ):
+            text_font_size -= 1
+            text_font = pygame.font.SysFont(
+                "arial", text_font_size, bold=True,
+            )
+            line_height = text_font.get_linesize() + 3
+
+        text_lines = wrap_story(story[:visible_characters], text_font)
+        full_lines = wrap_story(story, text_font)
+        text_y = text_area.y + max(
+            0,
+            (text_area.height - len(full_lines) * line_height) // 2,
+        )
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(text_area)
+        for line in text_lines:
+            line_surface = text_font.render(line, True, COLOR_WHITE)
+            self.screen.blit(line_surface, (text_x, text_y))
+            text_y += line_height
+        self.screen.set_clip(previous_clip)
+        self.opening_story_skip_button.draw(self.screen)
 
     def _on_dev_mode_click(self):
         if not DEVELOPER_MODE_ENABLED:
@@ -301,6 +496,7 @@ class Game:
     def _select_dev_phase(self, phase_index):
         if not DEVELOPER_MODE_ENABLED:
             return
+        self.audio.set_tension(0)
         self.game_state.phase_index = phase_index
         self.game_state.round_index = 0
         self.arrow = None
@@ -314,10 +510,34 @@ class Game:
         sys.exit()
 
     def _on_back_to_menu(self):
+        self.audio.set_tension(0)
+        self.arrow = None
+        self.calculator.close()
+        self.dialog.hide()
+        self.result_pending = False
         self.state = STATE_MENU
         self._build_menu_buttons()
 
+    def _on_next_phase(self):
+        self.audio.set_tension(0)
+        self.audio.play("phase")
+        self.state = STATE_PHASE_INTRO
+        self._build_phase_intro_buttons()
+
+    def _on_replay_phase(self):
+        if self.completed_phase_index is None:
+            return
+        self.audio.set_tension(0)
+        phase_index = self.completed_phase_index
+        self.game_state.reset()
+        self.game_state.phase_index = phase_index
+        self.game_state.round_index = 0
+        self.game_state.save()
+        self.state = STATE_PHASE_INTRO
+        self._build_phase_intro_buttons()
+
     def _on_restart_click(self):
+        self.audio.set_tension(0)
         self.restart_confirmation.hide()
         self.game_state.reset()
         self.layout_index = 0
@@ -327,6 +547,7 @@ class Game:
         self.phase_2_animation_stage = None
         self.phase_2_animation_time = 0.0
         self.phase_2_formula_progress = 0.0
+        self.phase_2_shoot_time = 0.0
         self.phase_3_animation_stage = None
         self.phase_3_animation_time = 0.0
         self.phase_3_photo_visible = False
@@ -363,7 +584,11 @@ class Game:
         velocity = self.input_velocity.get_value()
         launch_x, launch_y = self._get_launch_point()
         self.attempt_count += 1
-        self.archer.fire()
+        if self.game_state.phase_index != 1:
+            self.archer.fire()
+        else:
+            self.phase_2_shoot_time = PHASE_2_SHOOT_DURATION
+        self.audio.play("launch")
         self.arrow = Arrow(launch_x, launch_y, angle, velocity)
         if self.game_state.phase_index == 6:
             self.target.start_falling()
@@ -379,8 +604,13 @@ class Game:
 
     def _get_launch_point(self):
         if self.game_state.phase_index == 1:
-            aim_angle = self.input_angle.get_value() or 45
-            return self.archer.get_bow_launch_point(aim_angle)
+            sprite = self.phase_2_assets.bow_aim
+            anchor_x, anchor_y = PHASE_2_BOW_LAUNCH_ANCHOR
+            sprite_top = GROUND_Y - sprite.get_height()
+            return (
+                round(self.phase_2_scientist_x + sprite.get_width() * anchor_x),
+                round(sprite_top + sprite.get_height() * anchor_y),
+            )
         if self.game_state.phase_index == 4:
             aim_angle = self.input_angle.get_value() or 45
             _, muzzle, _ = self._get_phase_5_gun_geometry(aim_angle)
@@ -406,6 +636,7 @@ class Game:
     def _start_round(self):
         scientist = self.game_state.current_scientist()
         self.attempt_count = 0
+        self.audio.set_tension(0)
         self.phase_1_button_animation_time = 0.0
         self.phase_1_animation_stage = None
         self.phase_2_animation_stage = None
@@ -452,6 +683,8 @@ class Game:
         self.state = STATE_AIMING
 
     def _finish_launch(self, success: bool, reason: str):
+        self.audio.play("hit" if success else "miss")
+        self.audio.set_tension(0 if success else self.attempt_count)
         self.last_result_success = success
         self.result_pending = True
         self.arrow = None
@@ -485,26 +718,11 @@ class Game:
             else:
                 self._advance_after_result()
         else:
-            if self.attempt_count >= 4:
-                if self.game_state.phase_index == 0:
-                    reason += " O jogo sera reiniciado."
-                else:
-                    reason += " Voce voltara ao inicio da fase anterior."
             self.dialog.show("Tente novamente", reason)
 
     def _advance_after_result(self):
         self.result_pending = False
         if not self.last_result_success:
-            if self.attempt_count >= 4:
-                if self.game_state.phase_index == 0:
-                    self.game_state.reset()
-                    self.layout_index = 0
-                else:
-                    self.game_state.return_to_previous_phase()
-                self.state = STATE_PHASE_INTRO
-                self._build_phase_intro_buttons()
-                return
-
             self.state = STATE_AIMING
             self._refresh_aiming_buttons()
             if self.attempt_count == 2:
@@ -519,13 +737,13 @@ class Game:
                 self.dialog.show(f"Dicas de {scientist['name']}", hints)
             return
 
+        completed_phase_index = self.game_state.phase_index
         still_playing = self.game_state.advance_round()
-        if not still_playing:
-            self.state = STATE_GAME_OVER
-            self._build_game_over_buttons()
-        elif self.game_state.round_index == 0:
-            self.state = STATE_PHASE_INTRO
-            self._build_phase_intro_buttons()
+        if not still_playing or self.game_state.round_index == 0:
+            self.completed_phase_index = completed_phase_index
+            self.state = STATE_PHASE_COMPLETE
+            self.audio.play("phase")
+            self._build_phase_complete_buttons(still_playing)
         else:
             self._start_round()
 
@@ -665,8 +883,74 @@ class Game:
             else self.phase_7_assets.forest_scene
         )
         self.screen.blit(forest, (0, 0))
+        self._draw_phase_7_cliff()
         if self.phase_7_animation_stage in ("web_attach", "caught"):
             self._draw_phase_7_capture_web()
+
+    def _draw_phase_7_cliff(self):
+        cliff_x, cliff_y = FIXED_SCENARIOS[6]["cliff_position"]
+        cliff_width = 138
+        cliff_bottom = GROUND_Y
+        face = [
+            (cliff_x, cliff_y + 4),
+            (cliff_x + cliff_width, cliff_y + 4),
+            (cliff_x + cliff_width - 8, cliff_bottom - 26),
+            (cliff_x + cliff_width - 22, cliff_bottom),
+            (cliff_x + 19, cliff_bottom),
+            (cliff_x + 5, cliff_bottom - 18),
+        ]
+        pygame.draw.polygon(self.screen, (66, 76, 62), face)
+        pygame.draw.polygon(
+            self.screen, (43, 55, 48), face, width=3,
+        )
+        pygame.draw.polygon(
+            self.screen, (95, 111, 78),
+            [
+                (cliff_x + 12, cliff_y + 19),
+                (cliff_x + 47, cliff_y + 11),
+                (cliff_x + 39, cliff_y + 42),
+                (cliff_x + 9, cliff_y + 51),
+            ],
+        )
+        pygame.draw.polygon(
+            self.screen, (83, 98, 70),
+            [
+                (cliff_x + 77, cliff_y + 13),
+                (cliff_x + 119, cliff_y + 21),
+                (cliff_x + 112, cliff_y + 49),
+                (cliff_x + 73, cliff_y + 43),
+            ],
+        )
+        pygame.draw.polygon(
+            self.screen, (51, 66, 54),
+            [
+                (cliff_x + 37, cliff_y + 53),
+                (cliff_x + 72, cliff_y + 47),
+                (cliff_x + 67, cliff_bottom - 8),
+                (cliff_x + 31, cliff_bottom - 12),
+            ],
+        )
+        pygame.draw.polygon(
+            self.screen, (67, 88, 54),
+            [
+                (cliff_x - 3, cliff_y + 5),
+                (cliff_x + 13, cliff_y - 2),
+                (cliff_x + 34, cliff_y + 2),
+                (cliff_x + 52, cliff_y - 4),
+                (cliff_x + 72, cliff_y + 1),
+                (cliff_x + 94, cliff_y - 3),
+                (cliff_x + 117, cliff_y + 2),
+                (cliff_x + cliff_width + 4, cliff_y + 7),
+                (cliff_x + cliff_width, cliff_y + 16),
+                (cliff_x, cliff_y + 14),
+            ],
+        )
+        pygame.draw.line(
+            self.screen, (133, 151, 83),
+            (cliff_x + 3, cliff_y + 4),
+            (cliff_x + cliff_width - 2, cliff_y + 6),
+            3,
+        )
 
     def _draw_phase_7_capture_web(self):
         if self.phase_7_capture_position is None:
@@ -1058,21 +1342,19 @@ class Game:
             self._finish_launch(False, "A flecha caiu no chao antes de chegar ao alvo.")
 
     def _target_collides_with_arrow(self, x, y):
-        if self.game_state.phase_index == 0:
-            button_rect = pygame.Rect((0, 0), PHASE_1_BUTTON_SIZE)
-            button_rect.center = (self.target.x, self.target.y)
-            return button_rect.collidepoint(x, y)
-        if self.game_state.phase_index == 2:
-            button_rect = pygame.Rect((0, 0), FIXED_SCENARIOS[2]["button_size"])
-            button_rect.center = (round(self.target.x), round(self.target.y))
-            return button_rect.collidepoint(x, y)
+        if self.game_state.phase_index in (0, 2):
+            radius = (
+                PHASE_1_BUTTON_RADIUS
+                if self.game_state.phase_index == 0
+                else PHASE_3_BUTTON_RADIUS
+            )
+            return (
+                (x - self.target.x) ** 2 + (y - self.target.y) ** 2
+                <= radius ** 2
+            )
         return self.target.collides_with_point(x, y)
 
     def _draw_phase_1_button(self):
-        width, height = PHASE_1_BUTTON_SIZE
-        button_rect = pygame.Rect(0, 0, width, height)
-        button_rect.center = (round(self.target.x), round(self.target.y))
-
         pressed_amount = 0
         if self.phase_1_button_animation_time > 0:
             elapsed = PHASE_1_BUTTON_ANIMATION_DURATION - self.phase_1_button_animation_time
@@ -1084,15 +1366,26 @@ class Game:
                 ) / PHASE_1_BUTTON_RETURN_DURATION
             else:
                 progress = 0
-            pressed_amount = round(6 * progress)
+            pressed_amount = round(4 * progress)
 
-        shadow_rect = button_rect.move(0, 7 - pressed_amount)
-        face_rect = button_rect.move(0, -pressed_amount)
-        pygame.draw.rect(self.screen, (35, 55, 92), shadow_rect, border_radius=12)
-        pygame.draw.rect(self.screen, (42, 132, 214), face_rect, border_radius=12)
-        pygame.draw.rect(self.screen, COLOR_WHITE, face_rect, width=3, border_radius=12)
-        label = self.font_target.render("LIGAR RAIO-X", True, COLOR_WHITE)
-        self.screen.blit(label, label.get_rect(center=face_rect.center))
+        center = (round(self.target.x), round(self.target.y - pressed_amount))
+        pygame.draw.circle(
+            self.screen, (19, 67, 91),
+            (center[0], center[1] + 5), PHASE_1_BUTTON_RADIUS,
+        )
+        pygame.draw.circle(
+            self.screen, (42, 174, 205), center, PHASE_1_BUTTON_RADIUS,
+        )
+        pygame.draw.circle(
+            self.screen, (151, 238, 245), center, PHASE_1_BUTTON_RADIUS, 2,
+        )
+        pygame.draw.ellipse(
+            self.screen, (217, 255, 255),
+            (
+                center[0] - 8, center[1] - 11,
+                10, 4,
+            ),
+        )
 
     def _update_phase_1_animation(self, dt):
         if self.phase_1_animation_stage == "button":
@@ -1118,21 +1411,53 @@ class Game:
                 )
 
     def _update_phase_2_animation(self, dt):
+        self.phase_2_shoot_time = max(0.0, self.phase_2_shoot_time - dt)
         if self.phase_2_animation_stage == "chalk_fall":
             self.phase_2_animation_time += dt
             if self.phase_2_animation_time >= PHASE_2_CHALK_FALL_DURATION:
-                self.phase_2_animation_stage = "walk"
-                self.phase_2_animation_time = PHASE_2_WALK_DURATION
-        elif self.phase_2_animation_stage == "walk":
-            self.phase_2_animation_time = max(
-                0.0, self.phase_2_animation_time - dt
-            )
+                self.phase_2_animation_stage = "walk_to_chalk"
+                self.phase_2_animation_time = 0.0
+        elif self.phase_2_animation_stage == "walk_to_chalk":
             scene = FIXED_SCENARIOS[1]
-            progress = 1 - self.phase_2_animation_time / PHASE_2_WALK_DURATION
             start_x = scene["scientist_position"][0]
+            chalk_x = scene["chalk_position"][0] - 48
             end_x = scene["scientist_end_x"]
-            self.phase_2_scientist_x = round(start_x + (end_x - start_x) * progress)
-            if self.phase_2_animation_time == 0:
+            duration = PHASE_2_WALK_DURATION * (
+                (chalk_x - start_x) / (end_x - start_x)
+            )
+            self.phase_2_animation_time = min(
+                duration, self.phase_2_animation_time + dt
+            )
+            progress = self.phase_2_animation_time / duration
+            self.phase_2_scientist_x = round(
+                start_x + (chalk_x - start_x) * progress
+            )
+            if self.phase_2_animation_time == duration:
+                self.phase_2_animation_stage = "pickup"
+                self.phase_2_animation_time = 0.0
+        elif self.phase_2_animation_stage == "pickup":
+            self.phase_2_animation_time = min(
+                PHASE_2_PICKUP_DURATION, self.phase_2_animation_time + dt
+            )
+            if self.phase_2_animation_time == PHASE_2_PICKUP_DURATION:
+                self.phase_2_animation_stage = "walk_to_board"
+                self.phase_2_animation_time = 0.0
+        elif self.phase_2_animation_stage == "walk_to_board":
+            scene = FIXED_SCENARIOS[1]
+            start_x = scene["chalk_position"][0] - 48
+            end_x = scene["scientist_end_x"]
+            duration = PHASE_2_WALK_DURATION * (
+                (end_x - start_x)
+                / (end_x - scene["scientist_position"][0])
+            )
+            self.phase_2_animation_time = min(
+                duration, self.phase_2_animation_time + dt
+            )
+            progress = self.phase_2_animation_time / duration
+            self.phase_2_scientist_x = round(
+                start_x + (end_x - start_x) * progress
+            )
+            if self.phase_2_animation_time == duration:
                 self.phase_2_animation_stage = "write"
                 self.phase_2_animation_time = 0.0
         elif self.phase_2_animation_stage == "write":
@@ -1143,7 +1468,7 @@ class Game:
                 self.phase_2_animation_time / PHASE_2_WRITE_DURATION
             )
             if self.phase_2_animation_time == PHASE_2_WRITE_DURATION:
-                self.phase_2_animation_stage = None
+                self.phase_2_animation_stage = "done"
                 self.dialog.show(
                     "Emmy Noether",
                     "Obrigada por me ajudar a registrar o Teorema de Noether! "
@@ -1152,27 +1477,63 @@ class Game:
                     portrait=self.phase_2_assets.portrait,
                 )
 
-    def _draw_phase_2_chalk_box(self, x, y):
-        box = pygame.Rect(round(x), round(y), 54, 24)
-        pygame.draw.rect(self.screen, (73, 44, 34), box, border_radius=3)
+    def _draw_phase_2_chalk(self, x, y):
+        self.screen.blit(self.phase_2_assets.chalk, (round(x), round(y)))
+
+    def _draw_phase_2_bar(self, obstacle):
+        bar = obstacle.rect
         pygame.draw.rect(
-            self.screen, (166, 104, 64), box.inflate(-4, -4), border_radius=2
+            self.screen, (43, 32, 27), bar.inflate(4, 4), border_radius=6
+        )
+        pygame.draw.rect(self.screen, (101, 66, 44), bar, border_radius=5)
+        pygame.draw.rect(
+            self.screen, (142, 98, 62),
+            (bar.x + 3, bar.y + 3, bar.width - 6, 8),
+            border_radius=3,
         )
         pygame.draw.line(
-            self.screen, (213, 165, 112),
-            (box.left + 5, box.top + 5), (box.right - 5, box.top + 5), 2,
+            self.screen, (177, 130, 84),
+            (bar.x + 8, bar.y + 4), (bar.right - 8, bar.y + 4), 2,
         )
-        pygame.draw.rect(
-            self.screen, (237, 237, 226),
-            (box.left + 11, box.top + 10, 13, 5), border_radius=2,
+        pygame.draw.line(
+            self.screen, (67, 43, 32),
+            (bar.x + 4, bar.bottom - 4), (bar.right - 4, bar.bottom - 4), 2,
         )
-        pygame.draw.rect(
-            self.screen, (223, 225, 231),
-            (box.left + 29, box.top + 9, 14, 6), border_radius=2,
-        )
+        for nail_x in range(bar.x + 18, bar.right - 8, 72):
+            pygame.draw.circle(
+                self.screen, (55, 43, 36), (nail_x, bar.centery), 3
+            )
+            pygame.draw.circle(
+                self.screen, (184, 147, 103), (nail_x - 1, bar.centery - 1), 1
+            )
 
     def _draw_phase_2_scene(self):
         scene = FIXED_SCENARIOS[1]
+        self.screen.fill((42, 53, 58))
+        for panel_x in range(70, SCREEN_WIDTH, 140):
+            pygame.draw.line(
+                self.screen, (47, 59, 63),
+                (panel_x, 0), (panel_x, GROUND_Y - 12), 2,
+            )
+        pygame.draw.rect(
+            self.screen, (76, 58, 45),
+            (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y),
+        )
+        pygame.draw.rect(
+            self.screen, (106, 78, 54),
+            (0, GROUND_Y - 8, SCREEN_WIDTH, 8),
+        )
+        for floor_y in range(GROUND_Y + 18, SCREEN_HEIGHT, 18):
+            pygame.draw.line(
+                self.screen, (91, 69, 52),
+                (0, floor_y), (SCREEN_WIDTH, floor_y), 1,
+            )
+        for plank_x in range(100, SCREEN_WIDTH, 150):
+            pygame.draw.line(
+                self.screen, (91, 69, 52),
+                (plank_x, GROUND_Y), (plank_x, SCREEN_HEIGHT), 1,
+            )
+
         board_x, board_y = scene["blackboard_position"]
         self.screen.blit(self.phase_2_assets.empty_board, (board_x, board_y))
 
@@ -1181,16 +1542,24 @@ class Game:
                 1.0, self.phase_2_animation_time / PHASE_2_CHALK_FALL_DURATION
             )
             start_y = scene["chalk_position"][1]
-            end_y = GROUND_Y - 24
+            end_y = GROUND_Y - self.phase_2_assets.chalk.get_height()
             chalk_y = start_y + (end_y - start_y) * progress ** 2
-        elif (
-            self.phase_2_animation_stage in ("walk", "write")
-            or self.phase_2_formula_progress
-        ):
-            chalk_y = GROUND_Y - 24
-        else:
-            chalk_y = scene["chalk_position"][1]
-        self._draw_phase_2_chalk_box(scene["chalk_position"][0], chalk_y)
+            self._draw_phase_2_chalk(scene["chalk_position"][0], chalk_y)
+        elif self.phase_2_animation_stage == "walk_to_chalk":
+            self._draw_phase_2_chalk(
+                scene["chalk_position"][0],
+                GROUND_Y - self.phase_2_assets.chalk.get_height(),
+            )
+        elif self.phase_2_animation_stage in (None, "done"):
+            if self.phase_2_formula_progress:
+                self._draw_phase_2_chalk(
+                    board_x + 26,
+                    board_y + self.phase_2_assets.empty_board.get_height() - 43,
+                )
+            else:
+                self._draw_phase_2_chalk(
+                    scene["chalk_position"][0], scene["chalk_position"][1]
+                )
 
         if self.phase_2_formula_progress:
             character_count = round(
@@ -1198,11 +1567,11 @@ class Game:
             )
             formula = PHASE_2_FORMULA[:character_count]
             if formula:
-                formula_font = pygame.font.SysFont("timesnewroman", 26)
+                formula_font = pygame.font.SysFont("timesnewroman", 28)
                 formula_surf = formula_font.render(
                     formula, True, (235, 239, 229)
                 )
-                formula_area = pygame.Rect(board_x + 21, board_y + 57, 148, 35)
+                formula_area = pygame.Rect(board_x + 31, board_y + 45, 172, 48)
                 if formula_surf.get_width() > formula_area.width:
                     formula_surf = pygame.transform.smoothscale(
                         formula_surf,
@@ -1213,24 +1582,36 @@ class Game:
                     formula_surf.get_rect(center=formula_area.center),
                 )
 
-    def _draw_phase_2_scientist(self, aim_angle):
-        sprite = self.phase_2_assets.idle
-        if self.phase_2_animation_stage == "walk":
+    def _draw_phase_2_scientist(self):
+        if self.phase_2_shoot_time > 0:
+            sprite = self.phase_2_assets.bow_shoot
+        elif self.phase_2_animation_stage in ("walk_to_chalk", "walk_to_board"):
             frame_index = int(
-                (PHASE_2_WALK_DURATION - self.phase_2_animation_time)
-                * PHASE_2_WALK_FRAME_RATE
+                self.phase_2_animation_time * PHASE_2_WALK_FRAME_RATE
             ) % len(self.phase_2_assets.walk)
             sprite = self.phase_2_assets.walk[frame_index]
-        self.screen.blit(
-            sprite, self._grounded_character_position(
-                sprite, self.phase_2_scientist_x,
-            ),
+        elif self.phase_2_animation_stage == "pickup":
+            sprite = pygame.transform.scale(self.phase_2_assets.idle, (66, 112))
+        elif self.phase_2_animation_stage in ("write", "done"):
+            sprite = self.phase_2_assets.idle
+        elif self.state == STATE_AIMING:
+            sprite = (
+                self.phase_2_assets.bow_draw
+                if self.archer.draw_progress < 1
+                else self.phase_2_assets.bow_aim
+            )
+        else:
+            sprite = self.phase_2_assets.bow_hold
+        position = self._grounded_character_position(
+            sprite, self.phase_2_scientist_x,
         )
-        if (
-            self.phase_2_animation_stage is None
-            and self.phase_2_formula_progress == 0
+        self.screen.blit(sprite, position)
+        if self.phase_2_animation_stage in (
+            "pickup", "walk_to_board", "write",
         ):
-            self.archer.draw_bow(self.screen, aim_angle, draw_arms=False)
+            self._draw_phase_2_chalk(
+                self.phase_2_scientist_x + 46, position[1] + 54
+            )
 
     def _update_phase_3_animation(self, dt):
         if self.phase_3_animation_stage == "button_press":
@@ -1278,16 +1659,28 @@ class Game:
                 )
 
     def _draw_phase_3_button(self):
-        button = self.phase_3_assets.button
-        rect = button.get_rect(center=(round(self.target.x), round(self.target.y)))
+        center = (round(self.target.x), round(self.target.y))
         if self.phase_3_animation_stage == "button_press":
             progress = min(
                 1.0,
                 self.phase_3_animation_time
                 / FIXED_SCENARIOS[2]["button_press_duration"],
             )
-            rect.y += round(5 * progress)
-        self.screen.blit(button, rect)
+            center = (center[0], center[1] + round(4 * progress))
+        pygame.draw.circle(
+            self.screen, (91, 21, 30),
+            (center[0], center[1] + 5), PHASE_3_BUTTON_RADIUS,
+        )
+        pygame.draw.circle(
+            self.screen, (224, 58, 67), center, PHASE_3_BUTTON_RADIUS,
+        )
+        pygame.draw.circle(
+            self.screen, (255, 173, 165), center, PHASE_3_BUTTON_RADIUS, 2,
+        )
+        pygame.draw.ellipse(
+            self.screen, (255, 224, 213),
+            (center[0] - 9, center[1] - 12, 12, 5),
+        )
 
     def _draw_phase_3_scene(self):
         scene = FIXED_SCENARIOS[2]
@@ -1344,7 +1737,10 @@ class Game:
 
     def _draw_background(self):
         if (
-            self.state in (STATE_PHASE_INTRO, STATE_AIMING, STATE_LAUNCHED)
+            self.state in (
+                STATE_OPENING_STORY, STATE_PHASE_INTRO, STATE_AIMING,
+                STATE_LAUNCHED,
+            )
             and self.game_state.phase_index < 6
         ):
             self.screen.blit(self.phase_background, (0, 0))
@@ -1352,6 +1748,18 @@ class Game:
 
         self.screen.fill(COLOR_BG)
         pygame.draw.rect(self.screen, COLOR_GROUND, (0, GROUND_Y, SCREEN_WIDTH, SCREEN_HEIGHT - GROUND_Y))
+
+    def _draw_audio_controls(self):
+        label = (
+            "Mudo" if self.audio.muted
+            else f"{round(self.audio.volume * 100)}%"
+        )
+        label_surface = self.font_small.render(label, True, COLOR_WHITE)
+        self.screen.blit(label_surface, self.audio_label_position)
+        self.audio_volume_down_button.draw(self.screen)
+        self.audio_volume_up_button.draw(self.screen)
+        self.audio_mute_button.text = "Som" if self.audio.muted else "Mudo"
+        self.audio_mute_button.draw(self.screen)
 
     def _draw_text_center(self, text, font, color, y):
         surf = font.render(text, True, color)
@@ -1419,7 +1827,6 @@ class Game:
                 section_y += 24
             section_y += 18
 
-        self.restart_button.draw(self.screen)
         for button in self.buttons:
             button.draw(self.screen)
 
@@ -1437,8 +1844,6 @@ class Game:
             True, COLOR_GRAY,
         )
         self.screen.blit(attempts_surf, (20, 78))
-        self.restart_button.draw(self.screen)
-
     def _draw_aiming_or_launched(self):
         self._draw_background()
         if self.game_state.phase_index == 0:
@@ -1473,7 +1878,7 @@ class Game:
 
         aim_angle = self.input_angle.get_value() or 45
         if self.game_state.phase_index == 1:
-            self._draw_phase_2_scientist(aim_angle)
+            self._draw_phase_2_scientist()
         elif self.game_state.phase_index == 4:
             self._draw_phase_5_scientist(aim_angle)
         elif self.game_state.phase_index == 6:
@@ -1482,7 +1887,11 @@ class Game:
             self.archer.draw(self.screen, aim_angle_deg=aim_angle)
 
         for obstacle in self.obstacles:
-            obstacle.draw(self.screen)
+            if self.game_state.phase_index == 1:
+                if not self.target.hit:
+                    self._draw_phase_2_bar(obstacle)
+            else:
+                obstacle.draw(self.screen)
         if self.game_state.phase_index == 2:
             self._draw_phase_3_scientist()
         elif self.game_state.phase_index == 5:
@@ -1540,6 +1949,25 @@ class Game:
         for button in self.buttons:
             button.draw(self.screen)
 
+    def _draw_phase_complete(self):
+        self._draw_background()
+        is_game_complete = self.game_state.is_game_complete()
+        title = (
+            "Parabens! Voce completou o jogo!"
+            if is_game_complete else "Fase concluida!"
+        )
+        self._draw_text_center(title, self.font_title, COLOR_SUCCESS, 220)
+        self._draw_text_center(
+            f"Pontuacao: {self.game_state.score}",
+            self.font_medium, COLOR_WHITE, 280,
+        )
+        self._draw_text_center(
+            "Escolha como deseja continuar",
+            self.font_small, COLOR_GRAY, 315,
+        )
+        for button in self.buttons:
+            button.draw(self.screen)
+
     # ------------------------------------------------------------ #
     # Loop principal
     # ------------------------------------------------------------ #
@@ -1553,8 +1981,36 @@ class Game:
                     pygame.quit()
                     sys.exit()
 
-                if self.state != STATE_MENU:
-                    self.quit_button.handle_event(event)
+                if (
+                    event.type == pygame.MOUSEBUTTONDOWN
+                    and event.button == 1
+                    and (
+                        self.state != STATE_LAUNCHED
+                        or self.dialog.visible
+                    )
+                ):
+                    self.audio.play("ui")
+
+                audio_buttons = (
+                    self.audio_volume_down_button,
+                    self.audio_volume_up_button,
+                    self.audio_mute_button,
+                )
+                for button in audio_buttons:
+                    button.handle_event(event)
+                if (
+                    event.type == pygame.MOUSEBUTTONDOWN
+                    and event.button == 1
+                    and any(
+                        button.rect.collidepoint(event.pos)
+                        for button in audio_buttons
+                    )
+                ):
+                    continue
+
+                if self.state == STATE_OPENING_STORY:
+                    self.opening_story_skip_button.handle_event(event)
+                    continue
 
                 if self.dialog.visible:
                     self.dialog.handle_event(event)
@@ -1566,6 +2022,21 @@ class Game:
                     self.restart_confirmation.handle_event(event)
                     continue
 
+                if self.state != STATE_MENU:
+                    global_buttons = (
+                        self.restart_button,
+                        self.back_to_menu_button,
+                        self.quit_button,
+                    )
+                    for button in global_buttons:
+                        button.handle_event(event)
+                    if (
+                        event.type == pygame.MOUSEBUTTONDOWN
+                        and event.button == 1
+                        and any(button.rect.collidepoint(event.pos) for button in global_buttons)
+                    ):
+                        continue
+
                 if self.state == STATE_MENU:
                     for button in self.buttons:
                         button.handle_event(event)
@@ -1573,7 +2044,6 @@ class Game:
                 elif self.state == STATE_PHASE_INTRO:
                     for button in self.buttons:
                         button.handle_event(event)
-                    self.restart_button.handle_event(event)
 
                 elif self.state == STATE_AIMING:
                     if self.calculator.visible:
@@ -1583,10 +2053,6 @@ class Game:
                         self.input_velocity.handle_event(event)
                         for button in self.buttons:
                             button.handle_event(event)
-                        self.restart_button.handle_event(event)
-
-                elif self.state == STATE_LAUNCHED:
-                    self.restart_button.handle_event(event)
 
                 elif self.state == STATE_DEV_MODE:
                     for button in self.buttons:
@@ -1595,10 +2061,14 @@ class Game:
                 elif self.state == STATE_GAME_OVER:
                     for button in self.buttons:
                         button.handle_event(event)
+                elif self.state == STATE_PHASE_COMPLETE:
+                    for button in self.buttons:
+                        button.handle_event(event)
 
             # updates que não dependem de eventos
             self.archer.update(dt, aiming=self.state == STATE_AIMING)
             self.calculator.update(dt)
+            self._update_opening_story(dt)
             if self.state == STATE_LAUNCHED and self.arrow and not self.dialog.visible:
                 self._update_launched(dt)
             self._update_phase_1_animation(dt)
@@ -1612,6 +2082,8 @@ class Game:
             # desenho
             if self.state == STATE_MENU:
                 self._draw_menu()
+            elif self.state == STATE_OPENING_STORY:
+                self._draw_opening_story()
             elif self.state == STATE_PHASE_INTRO:
                 self._draw_phase_intro()
             elif self.state in (STATE_AIMING, STATE_LAUNCHED):
@@ -1620,12 +2092,17 @@ class Game:
                 self._draw_dev_mode()
             elif self.state == STATE_GAME_OVER:
                 self._draw_game_over()
+            elif self.state == STATE_PHASE_COMPLETE:
+                self._draw_phase_complete()
 
             self.dialog.draw(self.screen)
             self.calculator.draw(self.screen)
             self.restart_confirmation.draw(self.screen)
-            if self.state != STATE_MENU:
+            if self.state not in (STATE_MENU, STATE_OPENING_STORY):
+                self.restart_button.draw(self.screen)
+                self.back_to_menu_button.draw(self.screen)
                 self.quit_button.draw(self.screen)
+            self._draw_audio_controls()
             pygame.display.flip()
 
 

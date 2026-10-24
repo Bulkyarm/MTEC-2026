@@ -92,19 +92,19 @@ FIXED_SCENARIOS = [
     # target e o centro do botao de ligar o raio-X.
     {
         "obstacles": [],
-        "scientist_position": (700, 408),
-        "scientist_machine_position": (785, 408),
+        "scientist_position": (700, 450),
+        "scientist_machine_position": (760, 408),
         "machine_position": (835, 309),
-        "target": (620, 500),
+        "target": (600, 500),
     },
     # Fase 2: barra horizontal bloqueia o caminho ate o alvo.
     {
         "obstacles": [(100, 235, 500, 30)],
         "target": (700, 430),
         "scientist_position": (30, 382),
-        "scientist_end_x": 500,
-        "blackboard_position": (790, 395),
-        "chalk_position": (350, 211),
+        "scientist_end_x": 685,
+        "blackboard_position": (750, 338),
+        "chalk_position": (350, 209),
     },
     # Fase 3: duas barras sobre o chao, alvo ao lado da barra alta e camera suspensa.
     {
@@ -112,14 +112,13 @@ FIXED_SCENARIOS = [
             (240, 390, 32, 130),
             (470, 220, 32, 300),
             # Ajuste manual: (x, y, largura, altura) da barra sobre o botao.
-            (600, 300, 100, 16),
+            (550, 300, 100, 16),
         ],
-        "target": (680, GROUND_Y - 36),
+        "target": (690, GROUND_Y - 36),
         "scientist_position": (420, 370),
         "scientist_end_x": 770,
         # A camera mede 150 px de altura; mantenha a base alinhada ao chao.
         "camera_position": (850, GROUND_Y - 150),
-        "button_size": (72, 72),
         "button_press_duration": 0.25,
         "bar_fall_duration": 0.8,
         "walk_duration": 2.0,
@@ -176,7 +175,8 @@ FIXED_SCENARIOS = [
         "target": (PHASE_7_TARGET_X, PHASE_7_TARGET_Y),
         "target_radius": 34,
         "target_fall_speed_multiplier": PHASE_7_TARGET_FALL_SPEED_MULTIPLIER,
-        "scientist_position": (110, 374),
+        "scientist_position": (110, 310),
+        "cliff_position": (90, 448),
         "forest_position": (0, 0),
     },
 ]
